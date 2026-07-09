@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Kartenwerkstatt – Fantasy Map Animator</title>
+<style>
+/* ============================================================
+   KARTENWERKSTATT v2 – dunkles Arkan-Interface
+   Alles lokal, keine externen Ressourcen.
+   ============================================================ */
+:root{
+  --bg:#14101f;
+  --bg2:#1b1530;
+  --panel:#201a38;
+  --panel2:#2a2248;
+  --line:#3a2f63;
+  --ink:#e8e2f5;
+  --ink-dim:#9d93bd;
+  --gold:#d9a94a;
+  --gold-soft:#e9c87f;
+  --arcane:#8f6cff;
+  --danger:#e06767;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
+body{
+  background:
+    radial-gradient(1200px 600px at 20% -10%, #241b45 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, #1d2a3f 0%, transparent 55%),
+    var(--bg);
+  color:var(--ink);
+  font:15px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
+  user-select:none;-webkit-user-select:none;
+  display:flex;flex-direction:column;
+  touch-action:none;
+}
+h1{
+  font-family:"Palatino","Palatino Linotype",Georgia,serif;
+  font-size:18px;letter-spacing:.12em;font-variant:small-caps;
+  color:var(--gold-soft);white-space:nowrap;
+}
+h2{
+  font-family:"Palatino","Palatino Linotype",Georgia,serif;
+  font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--gold);margin:14px 0 8px;
+  border-bottom:1px solid var(--line);padding-bottom:5px;
+}
+button, select, input[type=number]{
+  font:inherit;color:var(--ink);
+  background:var(--panel2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:8px 12px;min-height:40px;
+  cursor:pointer;
+}
+button:hover{border-color:var(--gold);}
+button:active{transform:translateY(1px);}
+button.primary{background:linear-gradient(180deg,#6b4fd8,#54399f);border-color:#8368e0;}
+button.gold{background:linear-gradient(180deg,#c79a3f,#9a742a);border-color:var(--gold);color:#1d1608;font-weight:600;}
+button.danger{border-color:#7a3a3a;color:#f0a0a0;}
+button.active{background:var(--arcane);border-color:#b9a4ff;color:#fff;}
+button:disabled{opacity:.4;cursor:default;}
+select{-webkit-appearance:none;appearance:none;padding-right:26px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink-dim) 50%),linear-gradient(135deg,var(--ink-dim) 50%,transparent 50%);
+  background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;
+  background-size:5px 5px;background-repeat:no-repeat;}
+select optgroup{background:var(--panel);color:var(--gold-soft);font-style:normal;}
+select option{background:var(--panel2);color:var(--ink);}
+input[type=range]{width:100%;accent-color:var(--gold);height:32px;cursor:pointer;}
+input[type=color]{width:52px;height:36px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px;cursor:pointer;}
+label.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0 2px;font-size:13px;color:var(--ink-dim);}
+label.row b{color:var(--ink);font-weight:500;}
+
+/* --- Kopfleiste --- */
+#topbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--line);z-index:5;
+}
+#topbar .spacer{flex:1;}
+#timeWrap{display:flex;align-items:center;gap:8px;min-width:220px;flex:2;}
+#timeline{flex:1;}
+#timeLabel{font-variant-numeric:tabular-nums;color:var(--ink-dim);font-size:13px;min-width:86px;text-align:right;}
+.mini{font-size:12px;color:var(--ink-dim);}
+#topbar select,#topbar input[type=number]{min-height:40px;}
+#loopLen{width:70px;}
+
+/* --- Hauptbereich --- */
+#main{flex:1;display:flex;min-height:0;}
+#stage{flex:1;position:relative;overflow:hidden;
+  background:
+    radial-gradient(600px 400px at 50% 40%, rgba(143,108,255,.06), transparent 70%),
+    repeating-conic-gradient(#171226 0% 25%, #1a1430 0% 50%) 0 0/28px 28px;
+}
+#canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;}
+#emptyHint{
+  position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+  align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:20px;
+}
+#emptyHint .rune{font-size:44px;opacity:.7;}
+#emptyHint p{color:var(--ink-dim);max-width:420px;}
+#zoomBox{
+  position:absolute;right:14px;bottom:14px;display:flex;gap:6px;align-items:center;
+  background:rgba(23,17,40,.85);border:1px solid var(--line);border-radius:12px;padding:6px;
+  backdrop-filter:blur(4px);
+}
+#zoomBox button{min-width:42px;}
+#zoomPct{min-width:52px;text-align:center;font-size:13px;color:var(--ink-dim);}
+
+/* --- Seitenleiste --- */
+#side{
+  width:308px;min-width:308px;background:var(--panel);border-left:1px solid var(--line);
+  overflow-y:auto;padding:12px 14px 30px;-webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+}
+.toolgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.toolgrid button{padding:8px 4px;font-size:12px;display:flex;flex-direction:column;gap:3px;align-items:center;}
+.toolgrid .ico{font-size:18px;}
+.btnrow{display:flex;gap:6px;margin-top:8px;}
+.btnrow button{flex:1;min-height:38px;padding:6px 4px;font-size:13px;}
+#zoneList{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+.zoneItem{
+  display:flex;align-items:center;gap:6px;padding:8px 8px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--panel2);cursor:pointer;
+}
+.zoneItem.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;background:#332a56;}
+.zoneItem .dot{width:14px;height:14px;border-radius:50%;flex:none;box-shadow:0 0 6px currentColor;}
+.zoneItem .zn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;}
+.zoneItem .zt{font-size:11px;color:var(--ink-dim);}
+.zoneItem button{min-height:32px;min-width:32px;padding:2px 6px;font-size:14px;border-radius:8px;}
+#newZoneRow{display:flex;gap:6px;margin-top:8px;}
+#newZoneType{flex:1;min-width:0;}
+#fxPanel .head{display:flex;gap:6px;align-items:center;margin-bottom:4px;}
+#fxPanel .head input[type=text]{
+  flex:1;font:inherit;color:var(--ink);background:var(--panel2);
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;
+}
+.check{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;color:var(--ink-dim);cursor:pointer;}
+.check input{width:20px;height:20px;accent-color:var(--gold);}
+.hintbox{font-size:12px;color:var(--ink-dim);background:var(--bg2);border:1px dashed var(--line);
+  border-radius:var(--radius);padding:8px 10px;margin-top:8px;}
+
+/* --- Export-Overlay --- */
+#exportOverlay{
+  position:fixed;inset:0;background:rgba(10,7,20,.82);z-index:50;
+  display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);
+}
+#exportOverlay.on{display:flex;}
+#exportCard{
+  background:var(--panel);border:1px solid var(--gold);border-radius:16px;
+  padding:26px 30px;width:min(400px,90vw);text-align:center;
+}
+#exportCard h1{margin-bottom:12px;}
+#progBar{height:12px;border-radius:6px;background:var(--bg2);overflow:hidden;margin:14px 0;border:1px solid var(--line);}
+#progFill{height:100%;width:0%;background:linear-gradient(90deg,var(--arcane),var(--gold));transition:width .15s;}
+#progText{color:var(--ink-dim);font-size:13px;margin-bottom:14px;}
+
+/* --- Toast --- */
+#toast{
+  position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+  background:var(--panel2);border:1px solid var(--gold);color:var(--ink);
+  padding:10px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:60;
+  max-width:90vw;text-align:center;
+}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* --- schmale Bildschirme: Seitenleiste unten --- */
+@media (max-width:720px){
+  #main{flex-direction:column;}
+  #side{width:100%;min-width:0;max-height:44vh;border-left:none;border-top:1px solid var(--line);}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;} }
+</style>
+</head>
+<body>
+
+<!-- ======================= KOPFLEISTE ======================= -->
+<div id="topbar">
+  <h1>✦ Kartenwerkstatt</h1>
+  <button id="btnImport" class="gold">Karte importieren</button>
+  <button id="btnLoad">Projekt laden</button>
+  <button id="btnSave">Projekt speichern</button>
+  <div class="spacer"></div>
+  <button id="btnPlay" class="primary" title="Play/Pause (Leertaste)">⏸ Pause</button>
+  <div id="timeWrap">
+    <input type="range" id="timeline" min="0" max="1000" value="0">
+    <span id="timeLabel">0,0 s / 6 s</span>
+  </div>
+  <span class="mini">Loop</span>
+  <input type="number" id="loopLen" min="1" max="10" step="0.5" value="6" title="Loop-Dauer in Sekunden (max. 10)">
+  <span class="mini">s</span>
+  <select id="fpsSel" title="Bildrate für den Export">
+    <option value="24">24 FPS</option>
+    <option value="30" selected>30 FPS</option>
+    <option value="60">60 FPS</option>
+  </select>
+  <select id="resSel" title="Export-Auflösung">
+    <option value="1">Voll (100 %)</option>
+    <option value="0.75">Hoch (75 %)</option>
+    <option value="0.5">Mittel (50 %)</option>
+  </select>
+  <button id="btnExport" class="gold">⬇ WebM exportieren</button>
+</div>
+
+<!-- ======================= HAUPTBEREICH ======================= -->
+<div id="main">
+  <div id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="emptyHint">
+      <div class="rune">🗺️</div>
+      <h1>Erwecke deine Karte zum Leben</h1>
+      <p>Importiere oben eine Fantasy-Map (PNG, JPG oder WebP), zeichne Zonen mit dem Pinsel ein und wähle aus über 60 Effekten – von Meerwellen über Ley-Lines bis Fog of War.</p>
+    </div>
+    <div id="zoomBox">
+      <button id="zoomOut" title="Herauszoomen">−</button>
+      <span id="zoomPct">100 %</span>
+      <button id="zoomIn" title="Hineinzoomen">+</button>
+      <button id="zoomFit" title="Einpassen">⤢</button>
+    </div>
+  </div>
+
+  <!-- ======================= SEITENLEISTE ======================= -->
+  <div id="side">
+    <h2>Werkzeuge</h2>
+    <div class="toolgrid">
+      <button data-tool="brush" class="active" title="Taste B"><span class="ico">🖌️</span>Pinsel</button>
+      <button data-tool="erase" title="Taste E"><span class="ico">🧽</span>Radierer</button>
+      <button data-tool="lasso" title="Taste L"><span class="ico">✂️</span>Lasso</button>
+      <button data-tool="pan" title="Taste H"><span class="ico">✋</span>Bewegen</button>
+    </div>
+    <label class="row"><span>Pinselgröße</span><b id="brushVal">48 px</b></label>
+    <input type="range" id="brushSize" min="4" max="240" value="48">
+    <label class="check"><input type="checkbox" id="pressureChk" checked> Stiftdruck steuert Pinselgröße (Apple Pencil)</label>
+    <div class="btnrow">
+      <button id="btnUndo" title="Strg/Cmd+Z">↩ Rückgängig</button>
+      <button id="btnRedo" title="Strg/Cmd+Umschalt+Z">↪ Wiederholen</button>
+    </div>
+
+    <h2>Zonen</h2>
+    <label class="check"><input type="checkbox" id="overlayChk" checked> Zonen-Markierung anzeigen</label>
+    <label class="check"><input type="checkbox" id="liveChk" checked> Live-Vorschau der Effekte</label>
+    <label class="row"><span>Markierungs-Deckkraft</span><b id="ovaVal">45 %</b></label>
+    <input type="range" id="overlayAlpha" min="10" max="90" value="45">
+    <div id="newZoneRow">
+      <select id="newZoneType"></select>
+      <button id="btnNewZone" class="primary">＋ Zone</button>
+    </div>
+    <div id="zoneList"></div>
+
+    <div id="fxPanel" style="display:none">
+      <h2>Effekt-Einstellungen</h2>
+      <div class="head">
+        <input type="text" id="zoneName" maxlength="40" title="Zonenname">
+        <button id="btnDelZone" class="danger" title="Zone löschen">🗑</button>
+      </div>
+      <label class="row"><span>Effekt-Typ</span></label>
+      <select id="fxType" style="width:100%"></select>
+      <label class="check"><input type="checkbox" id="fxEnabled" checked> Effekt aktiv</label>
+      <div class="btnrow">
+        <button id="btnDupZone" title="Zone samt Maske und Einstellungen kopieren">⧉ Duplizieren</button>
+        <button id="btnClearZone" title="Maske dieser Zone leeren">Leeren</button>
+        <button id="btnSmoothZone" title="Maskenränder weichzeichnen">Glätten</button>
+      </div>
+      <div id="fxControls"></div>
+    </div>
+
+    <div class="hintbox">
+      <b>Tipp:</b> Alle Effekte sind über „Zyklen pro Loop“ auf die Loop-Dauer synchronisiert, damit das exportierte Video nahtlos wiederholbar ist. Zwei Finger: Zoomen &amp; Verschieben. Routen-Effekte (Handelsrouten, Armeen …) einfach als Linie auf die Karte malen.
+    </div>
+  </div>
+</div>
+
+<!-- ======================= EXPORT-OVERLAY ======================= -->
+<div id="exportOverlay">
+  <div id="exportCard">
+    <h1>✦ Video wird erstellt</h1>
+    <div id="progBar"><div id="progFill"></div></div>
+    <div id="progText">Aufnahme läuft …</div>
+    <button id="btnCancelExport" class="danger">Abbrechen</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fileImg" accept="image/png,image/jpeg,image/webp" hidden>
+<input type="file" id="fileProj" accept=".json,application/json" hidden>
+
+<script>
+"use strict";
+/* ==================================================================
+   KARTENWERKSTATT v2 – Fantasy Map Animator
+   Einzelne Offline-HTML-Datei. Struktur:
+     1) Konstanten, Zustand, Hilfsfunktionen, Cache-System
+     2) Effekt-Engines (wiederverwendbare Zeichenbausteine)
+     3) Effekt-Registry (60+ Effekte in 7 Kategorien)
+     4) Szenen-Rendering (Bild + maskierte Effekte)
+     5) Ansicht (Zoom/Pan) und Anzeige-Loop
+     6) Zeichenwerkzeuge (Pinsel/Radierer/Lasso) + Undo/Redo
+     7) Zonen-Verwaltung + UI
+     8) Import / Projekt speichern & laden
+     9) WebM-Export via MediaRecorder
+   Loop-Prinzip: Zeitabhängigkeit ausschließlich über sin/cos mit
+   GANZZAHLIGEN Zyklen pro Loop oder über Modulo-Wrap. Dadurch ist
+   Phase 0 identisch mit Phase 1 → nahtlos loopbares WebM.
+   ================================================================== */
+
+const TAU = Math.PI * 2;
+const MAX_SCENE = 2048;   // maximale Arbeitsauflösung (längste Kante)
+const PAD = 80;           // Rand-Puffer für Verschiebungs-Effekte
+
+// ---------- globaler Zustand ----------
+const state = {
+  img: null,            // HTMLImageElement der Karte
+  imgDataURL: null,     // Original als DataURL (für Projektdatei)
+  W: 0, H: 0,           // Szenen-Auflösung
+  zones: [],            // Zonen-Objekte
+  sel: null,            // ausgewählte Zone
+  loop: 6,              // Loop-Dauer in Sekunden
+  time: 0,              // aktuelle Zeit innerhalb des Loops
+  playing: true,
+  live: true,           // Live-Vorschau der Effekte an/aus
+  tool: 'brush',
+  brush: 48,
+  usePressure: true,
+  showOverlays: true,
+  overlayAlpha: 0.45,
+  exporting: false,
+};
+
+// ---------- Canvases ----------
+const displayCanvas = document.getElementById('canvas');
+const dctx = displayCanvas.getContext('2d');
+const baseC   = document.createElement('canvas');  // Karte in Szenen-Auflösung
+const basePad = document.createElement('canvas');  // Karte mit Rand-Puffer (für Displacement)
+const sceneC  = document.createElement('canvas');  // fertig komponierte Szene
+const bctx = baseC.getContext('2d');
+const pctx = basePad.getContext('2d');
+const sctx = sceneC.getContext('2d');
+
+// ---------- Ansicht (Pan/Zoom in CSS-Pixeln) ----------
+const view = { x: 0, y: 0, s: 1 };
+
+// ---------- kleine Helfer ----------
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+function toast(msg, ms=2600){
+  const t=$('toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'), ms);
+}
+// deterministischer Zufall (damit Partikel bei jedem Frame/Export identisch sind)
+function mulberry32(seed){
+  return function(){
+    seed|=0; seed=(seed+0x6D2B79F5)|0;
+    let t=Math.imul(seed^(seed>>>15),1|seed);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function hexToRgb(hex){
+  const n=parseInt(hex.slice(1),16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function rgba(hex,a){const[r,g,b]=hexToRgb(hex);return `rgba(${r},${g},${b},${Math.max(0,a)})`;}
+function cloneCanvas(src){
+  const c=document.createElement('canvas'); c.width=src.width; c.height=src.height;
+  c.getContext('2d').drawImage(src,0,0); return c;
+}
+// "Feuer-Flackern": Summe mehrerer Sinuswellen mit ganzzahligen Frequenzen → looped
+function flick(p,c,ph){
+  return 0.55 + 0.2*Math.sin(TAU*c*p+ph)
+              + 0.15*Math.sin(TAU*(2*c+1)*p+ph*1.7)
+              + 0.10*Math.sin(TAU*(3*c+2)*p+ph*2.3);
+}
+
+// ---------- Cache-System je Zone ----------
+// Partikel, Pfade, Sprites & Co. werden deterministisch aus dem Zonen-Seed
+// erzeugt und gecacht. Bei Masken-/Parameteränderung wird der Cache geleert.
+function rngFor(z,key){
+  let h=z.seed|0;
+  for(let i=0;i<key.length;i++) h=(Math.imul(h,31)+key.charCodeAt(i))|0;
+  return mulberry32(h);
+}
+function getCached(z,key,maker){
+  if(!z._cache) z._cache={};
+  if(!(key in z._cache)) z._cache[key]=maker(rngFor(z,key));
+  return z._cache[key];
+}
+function getParts(z,key,count,maker){
+  return getCached(z,key,(rng)=>{
+    const a=[]; for(let i=0;i<count;i++) a.push(maker(rng,i)); return a;
+  });
+}
+
+/* ==================================================================
+   2) EFFEKT-ENGINES – wiederverwendbare Zeichenbausteine
+   Alle zeichnen in einen Bounding-Box-Canvas (tc) der Größe bx.w × bx.h.
+   ================================================================== */
+
+// Zeilenweise horizontale Verschiebung der Kartenpixel (Wasser, Hitze, Lava)
+function displaceRows(tc, bx, fn, band=3){
+  for(let y=0; y<bx.h; y+=band){
+    const h=Math.min(band, bx.h-y);
+    const dx=fn(y);
+    tc.drawImage(basePad, PAD+bx.x-dx, PAD+bx.y+y, bx.w, h, 0, y, bx.w, h);
+  }
+}
+// Spaltenweise Verschiebung (Wind / Vegetation / Sand)
+function displaceCols(tc, bx, fn, band=4){
+  for(let x=0; x<bx.w; x+=band){
+    const w=Math.min(band, bx.w-x);
+    const dx=fn(x);
+    tc.drawImage(basePad, PAD+bx.x+x-dx, PAD+bx.y, w, bx.h, x, 0, w, bx.h);
+  }
+}
+// weicher runder Sprite (Rauch/Wolken/Nebel-Bausteine)
+function softSprite(size, r,g,b, alpha){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const x=c.getContext('2d');
+  const gr=x.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  gr.addColorStop(0,`rgba(${r},${g},${b},${alpha})`);
+  gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+  x.fillStyle=gr; x.fillRect(0,0,size,size);
+  return c;
+}
+// Wolken-/Nebel-Sprite aus mehreren weichen Blobs, optional gefärbt
+function cloudSprite(rng, w, h, blobAlpha, r=255,g=255,b=255){
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const x=c.getContext('2d');
+  const n=7+((rng()*4)|0);
+  for(let i=0;i<n;i++){
+    const bx=w*0.15+rng()*w*0.7, by=h*0.3+rng()*h*0.45;
+    const rr=h*(0.25+rng()*0.35);
+    const gr=x.createRadialGradient(bx,by,0,bx,by,rr);
+    gr.addColorStop(0,`rgba(${r},${g},${b},${blobAlpha})`);
+    gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+    x.fillStyle=gr; x.beginPath(); x.arc(bx,by,rr,0,TAU); x.fill();
+  }
+  return c;
+}
+// driftende Sprite-Schicht mit Richtung + nahtlosem Wrap (Wolken/Nebel/Sturm)
+function driftLayer(tc, z, p, bx, sprite, cycles, dir, spriteScale, alpha, layerOfs, count){
+  const diag=Math.hypot(bx.w,bx.h);
+  const sw=sprite.width*spriteScale, sh=sprite.height*spriteScale;
+  const L=diag+sw;                      // Wrap-Periode
+  const key=`drift|${layerOfs}|${bx.w}x${bx.h}|${count}|${spriteScale.toFixed(2)}`;
+  const parts=getParts(z, key, Math.max(3,count|0), (rng)=>({
+    x0:rng()*L, y:(rng()-0.5)*diag, a:0.6+rng()*0.4
+  }));
+  tc.save();
+  tc.translate(bx.w/2, bx.h/2);
+  tc.rotate(dir*Math.PI/180);
+  for(const pt of parts){
+    // Position wandert um cycles*L pro Loop → landet exakt am Start (nahtlos)
+    let x=(pt.x0 + (p*cycles + layerOfs)*L) % L; if(x<0)x+=L;
+    tc.globalAlpha=alpha*pt.a;
+    tc.drawImage(sprite, x-diag/2-sw, pt.y-sh/2, sw, sh);
+  }
+  tc.restore();
+  tc.globalAlpha=1;
+}
+// rotiertes Koordinatenfeld (für gerichtete Effekte); fn erhält die Diagonale
+function rotField(tc,bx,dirDeg,fn){
+  tc.save();
+  tc.translate(bx.w/2,bx.h/2);
+  tc.rotate((dirDeg||0)*Math.PI/180);
+  fn(Math.hypot(bx.w,bx.h));
+  tc.restore();
+}
+// bewegte Strichpartikel entlang einer Richtung (Regen-Verallgemeinerung:
+// Wasserfall, Schneewehen, Flussglanz, Sandsturm-Streifen …)
+function flowStreaks(tc,z,p,bx,o){
+  const diag=Math.hypot(bx.w,bx.h), L=diag+(o.len||20);
+  const key=`fs|${o.tag||''}|${bx.w}x${bx.h}|${o.count}`;
+  const parts=getParts(z,key,o.count,(rng)=>({
+    x:rng()*L, y:(rng()-0.5)*diag, k:(rng()<0.5?0:1), a:0.4+rng()*0.6, w:0.7+rng()*0.6
+  }));
+  rotField(tc,bx,o.dir,()=>{
+    tc.lineCap='round';
+    for(const pt of parts){
+      let x=(pt.x + p*(o.cycles+pt.k)*L)%L;          // ganzzahlige Wraps → looped
+      tc.globalAlpha=o.alpha*pt.a;
+      tc.lineWidth=o.width*pt.w;
+      tc.strokeStyle=o.color;
+      tc.beginPath();
+      tc.moveTo(x-L/2, pt.y);
+      tc.lineTo(x-L/2-o.len, pt.y);
+      tc.stroke();
+    }
+  });
+  tc.globalAlpha=1;
+}
+// funkelnde/blinkende Punktlichter (Sterne, Stadtlichter, Sonnenglitzer …)
+function twinkle(tc,z,p,bx,o){
+  const parts=getParts(z,`tw|${o.tag||''}|${bx.w}x${bx.h}|${o.count}`,o.count,(rng)=>({
+    x:rng()*bx.w, y:rng()*bx.h, phi:rng()*TAU, m:1+((rng()*3)|0), s:0.6+rng()*0.9
+  }));
+  const [r,g,b]=hexToRgb(o.color);
+  for(const pt of parts){
+    let tw;
+    if(o.mode==='sharp'){ tw=Math.max(0,Math.sin(TAU*o.cycles*p+pt.phi)); tw=tw*tw*tw; }
+    else { tw=0.55+0.45*Math.sin(TAU*pt.m*p+pt.phi); }   // sanftes Flackern, m ganzzahlig
+    if(tw<0.03) continue;
+    const sz=o.size*pt.s, a=tw*o.op;
+    const gr=tc.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,sz*2.4);
+    gr.addColorStop(0,`rgba(${r},${g},${b},${a})`);
+    gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+    tc.fillStyle=gr;
+    tc.beginPath(); tc.arc(pt.x,pt.y,sz*2.4,0,TAU); tc.fill();
+    if(o.cross){
+      tc.strokeStyle=`rgba(${r},${g},${b},${a})`; tc.lineWidth=1;
+      tc.beginPath();
+      tc.moveTo(pt.x-sz*2,pt.y); tc.lineTo(pt.x+sz*2,pt.y);
+      tc.moveTo(pt.x,pt.y-sz*2); tc.lineTo(pt.x,pt.y+sz*2);
+      tc.stroke();
+    }
+  }
+}
+// aufsteigende leuchtende Punkte (Funken, Glut, Signalfeuer)
+function risingDots(tc,z,p,bx,o){
+  const parts=getParts(z,`rd|${o.tag||''}|${bx.w}x${bx.h}|${o.count}`,o.count,(rng)=>({
+    x:rng()*bx.w, o:rng(), phi:rng()*TAU, m:1+((rng()*3)|0), s:0.5+rng()
+  }));
+  const [r,g,b]=hexToRgb(o.color);
+  for(const pt of parts){
+    const prog=(pt.o + p*o.cycles)%1;               // 0=unten … 1=oben, wrappt nahtlos
+    const y=bx.h*(1-prog);
+    let a=Math.sin(Math.PI*prog)*o.op;              // an beiden Enden 0 → kein Ploppen
+    if(o.flicker) a*=0.6+0.4*Math.sin(TAU*pt.m*p+pt.phi);
+    if(a<=0.01) continue;
+    const x=pt.x + bx.w*0.03*Math.sin(TAU*pt.m*p+pt.phi)*prog;
+    tc.fillStyle=`rgba(${r},${g},${b},${a})`;
+    tc.beginPath(); tc.arc(x,y,o.size*pt.s,0,TAU); tc.fill();
+  }
+}
+// aufsteigende weiche Schwaden (Rauch, Kaminrauch, Vulkanrauch)
+function risingPuffs(tc,z,p,bx,P,sprite){
+  const key=`puff|${bx.w}x${bx.h}|${P.count}`;
+  const parts=getParts(z,key,P.count,(rng)=>({
+    x:rng()*bx.w, o:rng(), phi:rng()*TAU, m:1+((rng()*3)|0), s:0.4+rng()*0.9
+  }));
+  for(const pt of parts){
+    const prog=(pt.o + p*P.cycles)%1;
+    const y=bx.h*(1-prog);
+    const a=Math.pow(Math.sin(Math.PI*prog),0.8)*(P.opacity/100);
+    const sway=bx.w*0.04*Math.sin(TAU*pt.m*p+pt.phi)*prog;
+    const sz=(20+70*prog)*pt.s*(P.size/100);
+    tc.globalAlpha=a;
+    tc.drawImage(sprite, pt.x+sway-sz/2, y-sz/2, sz, sz);
+  }
+  tc.globalAlpha=1;
+}
+// expandierende Ringe vom Zonenzentrum (Portal, Marker, Einflusszonen)
+function drawRings(tc,z,p,bx,o){
+  const cx=bx.w/2, cy=bx.h/2, maxR=Math.hypot(bx.w,bx.h)/2;
+  for(let i=0;i<o.n;i++){
+    const prog=((p*o.cycles)+i/o.n)%1;
+    const r=Math.max(1,prog*maxR);
+    const a=o.op*Math.sin(Math.PI*prog);            // Fade in/out → nahtlos
+    if(a<=0.01) continue;
+    tc.strokeStyle=rgba(o.color,a);
+    tc.lineWidth=o.width;
+    tc.beginPath(); tc.arc(cx,cy,r,0,TAU); tc.stroke();
+  }
+}
+// wandernde weiche/harte Streifenbänder (Sonnenstrahlen, Barrieren, Routen)
+function stripes(tc,z,p,bx,o){
+  const diag=Math.hypot(bx.w,bx.h);
+  const period=o.width+o.gap;
+  const shift=(((p*o.cycles*period*2)%period)+period)%period;  // 2 Perioden/Zyklus → looped
+  rotField(tc,bx,o.dir,()=>{
+    for(let x=-diag/2-period+shift; x<diag/2+period; x+=period){
+      if(o.soft){
+        const g=tc.createLinearGradient(x,0,x+o.width,0);
+        g.addColorStop(0,rgba(o.color,0));
+        g.addColorStop(0.5,rgba(o.color,o.op));
+        g.addColorStop(1,rgba(o.color,0));
+        tc.fillStyle=g;
+      }else{
+        tc.fillStyle=rgba(o.color,o.op);
+      }
+      tc.fillRect(x,-diag/2,o.width,diag);
+    }
+  });
+}
+// weiches Band an Position x (in rotierten Koordinaten) zeichnen
+function softBandAt(tc,x,width,diag,color,op){
+  const g=tc.createLinearGradient(x-width,0,x+width,0);
+  g.addColorStop(0,rgba(color,0));
+  g.addColorStop(0.5,rgba(color,op));
+  g.addColorStop(1,rgba(color,0));
+  tc.fillStyle=g;
+  tc.fillRect(x-width,-diag/2,width*2,diag);
+}
+// gezackte / geschwungene Pfade in der Zone (Ley-Lines, Risse, Tintenlinien)
+function getPaths(z,bx,n,jag){
+  return getCached(z,`paths|${bx.w}x${bx.h}|${n}|${jag}`,(rng)=>{
+    const out=[], diag=Math.hypot(bx.w,bx.h);
+    for(let i=0;i<n;i++){
+      const pts=[]; let x=rng()*bx.w, y=rng()*bx.h, ang=rng()*TAU;
+      const steps=8+((rng()*6)|0), sl=diag/steps*0.7;
+      for(let s2=0;s2<=steps;s2++){
+        pts.push({x,y});
+        ang+=(rng()-0.5)*jag*2;
+        x+=Math.cos(ang)*sl; y+=Math.sin(ang)*sl;
+      }
+      out.push(pts);
+    }
+    return out;
+  });
+}
+function strokePath(tc,pts){
+  tc.beginPath(); tc.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length-1;i++){
+    const xc=(pts[i].x+pts[i+1].x)/2, yc=(pts[i].y+pts[i+1].y)/2;
+    tc.quadraticCurveTo(pts[i].x,pts[i].y,xc,yc);
+  }
+  tc.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);
+  tc.stroke();
+}
+function dashPaths(tc,z,p,bx,o){
+  const paths=getPaths(z,bx,o.n,o.jag);
+  tc.lineCap='round'; tc.lineJoin='round';
+  if(!o.solid){
+    const period=o.dash+o.gap;
+    tc.setLineDash([o.dash,o.gap]);
+    // Offset läuft pro Loop um 4 volle Dash-Perioden → nahtlos
+    tc.lineDashOffset=-((p*o.cycles*period*4)%period);
+  }
+  for(let i=0;i<paths.length;i++){
+    const pl=o.pulse ? (0.6+0.4*Math.sin(TAU*o.cycles*p + i*2.1)) : 1;
+    if(o.glow){
+      tc.strokeStyle=rgba(o.color,o.op*0.3*pl);
+      tc.lineWidth=o.width*3.2;
+      strokePath(tc,paths[i]);
+    }
+    tc.strokeStyle=rgba(o.color,o.op*pl);
+    tc.lineWidth=o.width;
+    strokePath(tc,paths[i]);
+  }
+  tc.setLineDash([]);
+}
+// animiertes Korn/Rauschen: N vorgerenderte Zufallskacheln im Wechsel → looped
+function drawNoise(tc,z,p,bx,o){
+  const TILE=128;
+  const frames=getCached(z,`noise|${o.frames}|${o.mono}|${(o.tint||[]).join(',')}`,(rng)=>{
+    const arr=[];
+    for(let f=0;f<o.frames;f++){
+      const c=document.createElement('canvas'); c.width=c.height=TILE;
+      const x=c.getContext('2d');
+      const id=x.createImageData(TILE,TILE), d=id.data;
+      for(let i=0;i<d.length;i+=4){
+        const v=(rng()*255)|0;
+        if(o.mono){ d[i]=d[i+1]=d[i+2]=v; }
+        else{ d[i]=(v*o.tint[0]/255)|0; d[i+1]=(v*o.tint[1]/255)|0; d[i+2]=(v*o.tint[2]/255)|0; }
+        d[i+3]=(rng()*255)|0;
+      }
+      x.putImageData(id,0,0); arr.push(c);
+    }
+    return arr;
+  });
+  const idx=Math.floor((((p*o.cycles)%1)+1)%1*o.frames)%o.frames;  // ganzzahlige Zyklen → looped
+  const f=frames[idx], s=Math.max(24,TILE*o.scale);
+  tc.globalAlpha=o.alpha;
+  for(let y=0;y<bx.h;y+=s)
+    for(let x=0;x<bx.w;x+=s)
+      tc.drawImage(f,x,y,s,s);
+  tc.globalAlpha=1;
+}
+
+/* ==================================================================
+   3) EFFEKT-REGISTRY – 60+ Effekte in 7 Kategorien
+   Jeder Effekt: Name, Blend-Modus, Standard-Parameter, sichtbare Regler,
+   draw(tc, zone, phase, bbox).
+   ================================================================== */
+
+// Regler-Definitionen (werden je Effekt eingeblendet)
+const CONTROLS = {
+  intensity:{label:'Stärke / Intensität', min:0,   max:100, step:1, unit:' %'},
+  cycles:   {label:'Geschwindigkeit (Zyklen pro Loop)', min:1, max:10, step:1, unit:' ×'},
+  scale:    {label:'Skalierung / Wellenlänge', min:20, max:400, step:1, unit:''},
+  direction:{label:'Richtung', min:0, max:360, step:1, unit:'°'},
+  opacity:  {label:'Deckkraft / Transparenz', min:0, max:100, step:1, unit:' %'},
+  count:    {label:'Partikel / Dichte', min:5, max:400, step:1, unit:''},
+  num:      {label:'Anzahl (Linien / Ringe)', min:1, max:24, step:1, unit:''},
+  size:     {label:'Größe', min:20, max:300, step:1, unit:' %'},
+  width:    {label:'Linien- / Bandbreite', min:1, max:80, step:1, unit:' px'},
+  color:    {label:'Farbe / Glow-Farbe', type:'color'},
+};
+
+const EFFECTS = {
+
+/* ---------------------------- WASSER ---------------------------- */
+
+water:{ name:'Meerwellen', blend:'source-over',
+  defaults:{intensity:45, cycles:2, scale:120},
+  controls:['intensity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*14, L1=Math.max(20,P.scale), L2=L1*0.53;
+    const ph=z.seed%97/97*TAU;
+    displaceRows(tc,bx,y=>
+      amp*( Math.sin(TAU*(y/L1 + P.cycles*p)) +
+            0.5*Math.sin(TAU*(y/L2 - P.cycles*p)+ph) ), 3);
+    tc.globalCompositeOperation='lighter';
+    tc.fillStyle=`rgba(180,220,255,${0.05+0.04*Math.sin(TAU*P.cycles*p)})`;
+    tc.fillRect(0,0,bx.w,bx.h);
+    tc.globalCompositeOperation='source-over';
+  }},
+
+fluss:{ name:'Flussströmung', blend:'source-over',
+  defaults:{intensity:30, cycles:2, scale:120, direction:0, opacity:35, count:24},
+  controls:['intensity','cycles','scale','direction','opacity','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*8, L=Math.max(20,P.scale);
+    displaceRows(tc,bx,y=>amp*Math.sin(TAU*(y/L + P.cycles*p)),3);
+    tc.globalCompositeOperation='lighter';
+    flowStreaks(tc,z,p,bx,{tag:'fl',cycles:P.cycles,count:P.count,color:'#cfe8ff',
+      alpha:(P.opacity/100)*0.5, len:24+P.scale*0.25, width:2, dir:P.direction});
+    tc.globalCompositeOperation='source-over';
+  }},
+
+seeschimmer:{ name:'See-Schimmern', blend:'source-over',
+  defaults:{intensity:20, cycles:3, count:120, opacity:45},
+  controls:['intensity','cycles','count','opacity'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*4;
+    displaceRows(tc,bx,y=>amp*Math.sin(TAU*(y/45 + P.cycles*p)),3);
+    tc.globalCompositeOperation='lighter';
+    twinkle(tc,z,p,bx,{tag:'see',count:P.count,color:'#eaf6ff',
+      op:(P.opacity/100)*0.7,cycles:P.cycles,size:1.6,mode:'sharp'});
+    tc.globalCompositeOperation='source-over';
+  }},
+
+kueste:{ name:'Küstenwellen (Brandung)', blend:'source-over',
+  defaults:{opacity:45, cycles:2, scale:120, direction:0, width:16},
+  controls:['opacity','cycles','scale','direction','width'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    stripes(tc,z,p,bx,{color:'#ffffff',op:(P.opacity/100)*0.55,
+      width:P.width, gap:Math.max(30,P.scale), dir:P.direction, cycles:P.cycles, soft:true});
+  }},
+
+wasserfall:{ name:'Wasserfall', blend:'source-over',
+  defaults:{opacity:60, cycles:4, count:60, size:100, intensity:40},
+  controls:['opacity','cycles','count','size','intensity'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    flowStreaks(tc,z,p,bx,{tag:'wf',cycles:P.cycles,count:P.count,color:'#eef7ff',
+      alpha:(P.opacity/100)*0.7, len:bx.h*0.12*(P.size/100)+8, width:2, dir:90});
+    // Gischtnebel am Fuß
+    const a=(P.intensity/100)*0.35*(0.85+0.15*Math.sin(TAU*Math.max(1,Math.round(P.cycles/2))*p));
+    const g=tc.createLinearGradient(0,bx.h*0.65,0,bx.h);
+    g.addColorStop(0,'rgba(255,255,255,0)');
+    g.addColorStop(1,`rgba(255,255,255,${a})`);
+    tc.fillStyle=g; tc.fillRect(0,bx.h*0.65,bx.w,bx.h*0.35);
+  }},
+
+strudel:{ name:'Strudel / Whirlpool', blend:'source-over',
+  defaults:{intensity:45, cycles:2, opacity:50},
+  controls:['intensity','cycles','opacity'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2, R=Math.min(bx.w,bx.h)/2;
+    // hin- und herdrehende Verwringung des Kartenausschnitts
+    const ang=(P.intensity/100)*0.35*Math.sin(TAU*P.cycles*p);
+    tc.save(); tc.translate(cx,cy); tc.rotate(ang); tc.scale(1.12,1.12);
+    tc.drawImage(basePad, PAD+bx.x, PAD+bx.y, bx.w, bx.h, -cx,-cy, bx.w, bx.h);
+    tc.restore();
+    // kontinuierlich rotierende Spiralarme (volle Umdrehungen → looped)
+    tc.save(); tc.translate(cx,cy); tc.rotate(TAU*p*P.cycles);
+    tc.strokeStyle=rgba('#dff3ff',(P.opacity/100)*0.5); tc.lineWidth=2; tc.lineCap='round';
+    for(let arm=0; arm<3; arm++){
+      tc.beginPath();
+      for(let t=0.05;t<=1;t+=0.05){
+        const r=t*R, th=arm*TAU/3 + t*3.5;
+        const x=r*Math.cos(th), y=r*Math.sin(th);
+        t<=0.06 ? tc.moveTo(x,y) : tc.lineTo(x,y);
+      }
+      tc.stroke();
+    }
+    tc.restore();
+  }},
+
+sonnenglitzer:{ name:'Glitzernde Sonnenreflexe', blend:'lighter',
+  defaults:{color:'#fff3c4', opacity:85, cycles:4, count:90, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    twinkle(tc,z,p,bx,{tag:'sg',count:P.count,color:P.color,
+      op:P.opacity/100,cycles:P.cycles,size:1.4*(P.size/100)+0.6,mode:'sharp',cross:true});
+  }},
+
+/* ----------------------- WOLKEN & WETTER ------------------------ */
+
+clouds:{ name:'Wolkenbewegung', blend:'source-over',
+  defaults:{opacity:50, cycles:1, scale:160, direction:0, count:8},
+  controls:['opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const spr=getCached(z,'spr|cloud',(rng)=>cloudSprite(rng,260,140,0.5));
+    driftLayer(tc,z,p,bx,spr,P.cycles,P.direction,P.scale/160,P.opacity/100,0,P.count);
+  }},
+
+wolkenschatten:{ name:'Wolkenschatten', blend:'source-over',
+  defaults:{opacity:40, cycles:1, scale:200, direction:0, count:7},
+  controls:['opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const spr=getCached(z,'spr|shadow',(rng)=>cloudSprite(rng,300,160,0.5,8,10,18));
+    driftLayer(tc,z,p,bx,spr,P.cycles,P.direction,P.scale/160,P.opacity/100,0,P.count);
+  }},
+
+fog:{ name:'Nebel', blend:'source-over',
+  defaults:{opacity:40, cycles:1, scale:220, direction:0, count:10},
+  controls:['opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, s=P.scale/160, a=P.opacity/100;
+    const spr=getCached(z,'spr|fog',(rng)=>cloudSprite(rng,340,190,0.32));
+    driftLayer(tc,z,p,bx,spr, P.cycles,P.direction,s,     a*0.7, 0,   P.count);
+    driftLayer(tc,z,p,bx,spr,-P.cycles,P.direction,s*1.4, a*0.45,0.37,P.count);
+  }},
+
+dunkelnebel:{ name:'Dunkler Nebel', blend:'source-over',
+  defaults:{color:'#343a52', opacity:50, cycles:1, scale:220, direction:0, count:10},
+  controls:['color','opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, s=P.scale/160, a=P.opacity/100;
+    const spr=getCached(z,`spr|dn|${P.color}`,(rng)=>{
+      const[r,g,b]=hexToRgb(P.color); return cloudSprite(rng,340,190,0.4,r,g,b);
+    });
+    driftLayer(tc,z,p,bx,spr, P.cycles,P.direction,s,     a*0.75,0,   P.count);
+    driftLayer(tc,z,p,bx,spr,-P.cycles,P.direction,s*1.4, a*0.5, 0.37,P.count);
+  }},
+
+rain:{ name:'Regen', blend:'source-over',
+  defaults:{opacity:50, cycles:5, count:120, size:100, direction:15},
+  controls:['opacity','cycles','count','size','direction'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    let tilt=((P.direction%360)+360)%360; if(tilt>180)tilt-=360; tilt=clamp(tilt,-60,60);
+    const tr=tilt*Math.PI/180;
+    const hc=Math.round(P.cycles*Math.tan(tr)*0.6);
+    const len=bx.h*0.06*(P.size/100)+6;
+    const parts=getParts(z,`rain|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, k:(rng()<0.5?0:1), a:0.5+rng()*0.5
+    }));
+    tc.strokeStyle='rgba(200,220,255,1)'; tc.lineWidth=1.2; tc.lineCap='round';
+    for(const pt of parts){
+      const vy=P.cycles+pt.k;
+      let y=(pt.y + p*vy*bx.h)%bx.h;
+      let x=(pt.x + p*hc*bx.w)%bx.w; if(x<0)x+=bx.w;
+      tc.globalAlpha=(P.opacity/100)*0.7*pt.a;
+      tc.beginPath();
+      tc.moveTo(x,y);
+      tc.lineTo(x - Math.sin(tr)*len, y - Math.cos(tr)*len);
+      tc.stroke();
+    }
+    tc.globalAlpha=1;
+  }},
+
+snow:{ name:'Schneefall', blend:'source-over',
+  defaults:{opacity:80, cycles:2, count:150, size:100, direction:0},
+  controls:['opacity','cycles','count','size','direction'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const hc=Math.round(P.cycles*Math.sin(P.direction*Math.PI/180));
+    const parts=getParts(z,`snow|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, r:1+rng()*2.4, phi:rng()*TAU,
+      m:1+((rng()*2)|0), k:(rng()<0.5?0:1)
+    }));
+    tc.fillStyle='#fff';
+    for(const pt of parts){
+      const vy=P.cycles+pt.k;
+      let y=(pt.y + p*vy*bx.h)%bx.h;
+      let x=(pt.x + p*hc*bx.w + 7*Math.sin(TAU*pt.m*p+pt.phi))%bx.w;
+      if(x<0)x+=bx.w;
+      tc.globalAlpha=(P.opacity/100)*0.9;
+      tc.beginPath(); tc.arc(x,y,pt.r*(P.size/100),0,TAU); tc.fill();
+    }
+    tc.globalAlpha=1;
+  }},
+
+sandsturm:{ name:'Sandsturm', blend:'source-over',
+  defaults:{opacity:55, cycles:3, scale:160, direction:0, count:12},
+  controls:['opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const spr=getCached(z,'spr|sand',(rng)=>cloudSprite(rng,300,150,0.35,198,166,112));
+    driftLayer(tc,z,p,bx,spr,P.cycles,P.direction,P.scale/160,P.opacity/100,0,P.count);
+    flowStreaks(tc,z,p,bx,{tag:'ss',cycles:P.cycles+1,count:40,color:'#e0c48e',
+      alpha:(P.opacity/100)*0.45, len:40, width:1.5, dir:P.direction});
+  }},
+
+asche:{ name:'Ascheregen', blend:'source-over',
+  defaults:{opacity:70, cycles:2, count:120, size:100},
+  controls:['opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`ash|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, r:0.8+rng()*2, phi:rng()*TAU,
+      m:1+((rng()*3)|0), k:(rng()<0.5?0:1), ember:rng()<0.25
+    }));
+    for(const pt of parts){
+      const vy=P.cycles+pt.k;
+      let y=(pt.y + p*vy*bx.h)%bx.h;
+      let x=(pt.x + 10*Math.sin(TAU*pt.m*p+pt.phi))%bx.w; if(x<0)x+=bx.w;
+      if(pt.ember){
+        const tw=0.5+0.5*Math.sin(TAU*pt.m*p+pt.phi*2);
+        tc.fillStyle=`rgba(255,156,74,${(P.opacity/100)*tw})`;
+      }else{
+        tc.fillStyle=`rgba(150,150,150,${(P.opacity/100)*0.8})`;
+      }
+      tc.beginPath(); tc.arc(x,y,pt.r*(P.size/100),0,TAU); tc.fill();
+    }
+  }},
+
+blitz:{ name:'Blitze', blend:'lighter',
+  defaults:{color:'#eaf2ff', opacity:80, cycles:3, intensity:50},
+  controls:['color','opacity','cycles','intensity'],
+  draw(tc,z,p,bx){
+    const P=z.params, n=Math.max(1,P.cycles);
+    // fester Blitz-Zeitplan pro Loop (deterministisch → looped)
+    const evs=getCached(z,`bolt|${bx.w}x${bx.h}|${n}`,(rng)=>{
+      const a=[];
+      for(let i=0;i<n;i++){
+        const pts=[]; let x=bx.w*(0.2+rng()*0.6), y=0;
+        pts.push({x,y});
+        while(y<bx.h*0.85){
+          y+=bx.h*(0.06+rng()*0.08);
+          x+=(rng()-0.5)*bx.w*0.12;
+          pts.push({x,y});
+        }
+        a.push({t:(i+0.15+rng()*0.7)/n, pts});
+      }
+      return a;
+    });
+    const half=0.035;
+    for(const ev of evs){
+      let d=Math.abs(p-ev.t); d=Math.min(d,1-d);   // Wrap-Distanz → looped
+      if(d>half) continue;
+      const k=1-d/half;
+      tc.fillStyle=rgba(P.color,0.25*k*(P.opacity/100));
+      tc.fillRect(0,0,bx.w,bx.h);
+      tc.lineCap='round'; tc.lineJoin='round';
+      tc.strokeStyle=rgba(P.color,0.35*k);
+      tc.lineWidth=(2+P.intensity/100*4)*2.5;
+      tc.beginPath(); tc.moveTo(ev.pts[0].x,ev.pts[0].y);
+      for(const q of ev.pts) tc.lineTo(q.x,q.y);
+      tc.stroke();
+      tc.strokeStyle=rgba(P.color,0.95*k);
+      tc.lineWidth=1.5+P.intensity/100*2;
+      tc.beginPath(); tc.moveTo(ev.pts[0].x,ev.pts[0].y);
+      for(const q of ev.pts) tc.lineTo(q.x,q.y);
+      tc.stroke();
+    }
+  }},
+
+rays:{ name:'Sonnenstrahlen', blend:'lighter',
+  defaults:{color:'#ffe9a8', opacity:40, cycles:1, scale:140, direction:65},
+  controls:['color','opacity','cycles','scale','direction'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    stripes(tc,z,p,bx,{color:P.color,op:(P.opacity/100)*0.55,
+      width:Math.max(30,P.scale), gap:Math.max(30,P.scale), dir:P.direction,
+      cycles:P.cycles, soft:true});
+  }},
+
+smoke:{ name:'Rauch', blend:'source-over',
+  defaults:{opacity:45, cycles:1, count:35, size:100},
+  controls:['opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const spr=getCached(z,'spr|smoke',()=>softSprite(96,205,205,215,0.5));
+    risingPuffs(tc,z,p,bx,z.params,spr);
+  }},
+
+/* ----------------------------- MAGIE ---------------------------- */
+
+aura:{ name:'Magische Aura', blend:'lighter',
+  defaults:{color:'#8f6cff', opacity:55, cycles:2},
+  controls:['color','opacity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params, ph=z.seed%53/53*TAU;
+    const a=(P.opacity/100)*(0.5 + 0.3*Math.sin(TAU*P.cycles*p) + 0.2*Math.sin(TAU*3*P.cycles*p+ph));
+    tc.fillStyle=rgba(P.color, Math.max(0,a));
+    tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+glow:{ name:'Glühen / Pulsieren', blend:'lighter',
+  defaults:{color:'#ffd27a', opacity:45, cycles:2},
+  controls:['color','opacity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const a=(P.opacity/100)*(0.55+0.45*Math.sin(TAU*P.cycles*p));
+    tc.fillStyle=rgba(P.color,a);
+    tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+leylines:{ name:'Ley-Lines', blend:'lighter',
+  defaults:{color:'#7df0ff', opacity:60, cycles:2, num:5, width:3},
+  controls:['color','opacity','cycles','num','width'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    dashPaths(tc,z,p,bx,{color:P.color,op:P.opacity/100,width:P.width,
+      cycles:P.cycles,dash:16,gap:12,n:P.num,jag:0.25,glow:true});
+  }},
+
+portal:{ name:'Portal-Glühen', blend:'lighter',
+  defaults:{color:'#b06cff', opacity:65, cycles:2, num:4, width:4},
+  controls:['color','opacity','cycles','num','width'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2, maxR=Math.hypot(bx.w,bx.h)/2;
+    // pulsierender Kern
+    const a=(P.opacity/100)*0.35*(0.7+0.3*Math.sin(TAU*P.cycles*p));
+    const g=tc.createRadialGradient(cx,cy,0,cx,cy,maxR*0.55);
+    g.addColorStop(0,rgba(P.color,a));
+    g.addColorStop(1,rgba(P.color,0));
+    tc.fillStyle=g; tc.fillRect(0,0,bx.w,bx.h);
+    // expandierende Ringe
+    drawRings(tc,z,p,bx,{color:P.color,cycles:P.cycles,n:P.num,width:P.width,op:P.opacity/100});
+  }},
+
+runen:{ name:'Runen-Pulsieren', blend:'lighter',
+  defaults:{color:'#ffd27a', opacity:70, cycles:2, count:20, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`rune|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, phi:rng()*TAU, rot:rng()*TAU, shape:(rng()*3)|0, s:0.7+rng()*0.8
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    for(const pt of parts){
+      let a=Math.max(0,Math.sin(TAU*P.cycles*p+pt.phi)); a=a*a;
+      if(a<0.03) continue;
+      a*=P.opacity/100;
+      const s=6*pt.s*(P.size/100);
+      // weicher Glow hinter der Rune
+      const gr=tc.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,s*2.5);
+      gr.addColorStop(0,`rgba(${r},${g},${b},${a*0.5})`);
+      gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      tc.fillStyle=gr;
+      tc.beginPath(); tc.arc(pt.x,pt.y,s*2.5,0,TAU); tc.fill();
+      // Glyphe
+      tc.save(); tc.translate(pt.x,pt.y); tc.rotate(pt.rot);
+      tc.strokeStyle=`rgba(${r},${g},${b},${a})`; tc.lineWidth=1.6;
+      tc.beginPath();
+      if(pt.shape===0){ tc.moveTo(0,-s);tc.lineTo(s,0);tc.lineTo(0,s);tc.lineTo(-s,0);tc.closePath(); }
+      else if(pt.shape===1){ tc.moveTo(0,-s);tc.lineTo(s*0.87,s*0.5);tc.lineTo(-s*0.87,s*0.5);tc.closePath(); }
+      else { tc.moveTo(-s,0);tc.lineTo(s,0);tc.moveTo(0,-s);tc.lineTo(0,s); }
+      tc.stroke(); tc.restore();
+    }
+  }},
+
+sparkle:{ name:'Sternenstaub / Magic Particles', blend:'lighter',
+  defaults:{color:'#ffffff', opacity:80, cycles:3, count:80, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    twinkle(tc,z,p,bx,{tag:'sp',count:P.count,color:P.color,
+      op:P.opacity/100,cycles:P.cycles,size:(2+2*(P.size/100)),mode:'sharp',cross:true});
+  }},
+
+barriere:{ name:'Magische Barriere', blend:'lighter',
+  defaults:{color:'#54e0ff', opacity:45, cycles:2, scale:90, direction:60},
+  controls:['color','opacity','cycles','scale','direction'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const pulse=0.7+0.3*Math.sin(TAU*P.cycles*p);
+    stripes(tc,z,p,bx,{color:P.color,op:(P.opacity/100)*0.4*pulse,
+      width:Math.max(20,P.scale*0.5), gap:Math.max(20,P.scale), dir:P.direction,
+      cycles:P.cycles, soft:true});
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.12*pulse);
+    tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+verderbnis:{ name:'Verderbnis / Corruption', blend:'source-over',
+  defaults:{color:'#7b2fbf', opacity:55, cycles:1, scale:180, count:9},
+  controls:['color','opacity','cycles','scale','count'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const spr=getCached(z,`spr|cor|${P.color}`,(rng)=>{
+      const[r,g,b]=hexToRgb(P.color);
+      return cloudSprite(rng,300,170,0.5,(r*0.45)|0,(g*0.45)|0,(b*0.45)|0);
+    });
+    driftLayer(tc,z,p,bx,spr,P.cycles,0,P.scale/160,P.opacity/100,0,P.count);
+    tc.globalCompositeOperation='lighter';
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.12*(0.7+0.3*Math.sin(TAU*P.cycles*p)));
+    tc.fillRect(0,0,bx.w,bx.h);
+    tc.globalCompositeOperation='source-over';
+  }},
+
+nekronebel:{ name:'Nekrotischer Nebel', blend:'source-over',
+  defaults:{color:'#59d98c', opacity:45, cycles:1, scale:220, direction:0, count:10},
+  controls:['color','opacity','cycles','scale','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, s=P.scale/160, a=P.opacity/100;
+    const spr=getCached(z,`spr|nk|${P.color}`,(rng)=>{
+      const[r,g,b]=hexToRgb(P.color);
+      return cloudSprite(rng,340,190,0.35,(r*0.55)|0,(g*0.55)|0,(b*0.55)|0);
+    });
+    driftLayer(tc,z,p,bx,spr, P.cycles,P.direction,s,     a*0.75,0,   P.count);
+    driftLayer(tc,z,p,bx,spr,-P.cycles,P.direction,s*1.5, a*0.45,0.37,P.count);
+    tc.globalCompositeOperation='lighter';
+    tc.fillStyle=rgba(P.color,a*0.08*(0.7+0.3*Math.sin(TAU*P.cycles*p)));
+    tc.fillRect(0,0,bx.w,bx.h);
+    tc.globalCompositeOperation='source-over';
+  }},
+
+risse:{ name:'Dämonische Risse', blend:'lighter',
+  defaults:{color:'#ff3b2f', opacity:75, cycles:3, num:4, width:3},
+  controls:['color','opacity','cycles','num','width'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    dashPaths(tc,z,p,bx,{color:P.color,op:P.opacity/100,width:P.width,
+      cycles:P.cycles,n:P.num,jag:1.1,glow:true,solid:true,pulse:true});
+  }},
+
+/* --------------------------- GELÄNDE ---------------------------- */
+
+wind:{ name:'Wald-Wind', blend:'source-over',
+  defaults:{intensity:30, cycles:2, scale:150},
+  controls:['intensity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*10, L=Math.max(30,P.scale);
+    const ph=z.seed%89/89*TAU;
+    displaceCols(tc,bx,x=>
+      amp*( Math.sin(TAU*(x/L + P.cycles*p)) +
+            0.4*Math.sin(TAU*(x/(L*0.41) + 2*P.cycles*p)+ph) ), 4);
+  }},
+
+gluehwuermchen:{ name:'Glühwürmchen', blend:'lighter',
+  defaults:{color:'#c8ff6a', opacity:80, cycles:2, count:40, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`ff|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, phi:rng()*TAU, ph2:rng()*TAU,
+      m:1+((rng()*2)|0), A:8+rng()*24
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    for(const pt of parts){
+      // Kreisbewegung → Position bei p=0 und p=1 identisch
+      const x=pt.x + pt.A*Math.cos(TAU*pt.m*p+pt.phi);
+      const y=pt.y + pt.A*0.6*Math.sin(TAU*pt.m*p+pt.phi);
+      let tw=Math.max(0,Math.sin(TAU*P.cycles*p+pt.ph2));
+      tw=0.12+0.88*tw*tw*tw;
+      const a=tw*(P.opacity/100), sz=2*(P.size/100);
+      const gr=tc.createRadialGradient(x,y,0,x,y,sz*4);
+      gr.addColorStop(0,`rgba(${r},${g},${b},${a})`);
+      gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      tc.fillStyle=gr;
+      tc.beginPath(); tc.arc(x,y,sz*4,0,TAU); tc.fill();
+    }
+  }},
+
+parallax:{ name:'Gebirgs-Parallax', blend:'source-over',
+  defaults:{intensity:30, cycles:1},
+  controls:['intensity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*20;
+    const dx=amp*Math.cos(TAU*P.cycles*p), dy=amp*0.6*Math.sin(TAU*P.cycles*p);
+    tc.drawImage(basePad, PAD+bx.x-amp-dx, PAD+bx.y-amp-dy, bx.w+2*amp, bx.h+2*amp,
+                 -amp, -amp, bx.w+2*amp, bx.h+2*amp);
+  }},
+
+schneewehen:{ name:'Schneewehen', blend:'source-over',
+  defaults:{opacity:70, cycles:4, count:80, direction:0, size:100},
+  controls:['opacity','cycles','count','direction','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    flowStreaks(tc,z,p,bx,{tag:'sw',cycles:P.cycles,count:P.count,color:'#ffffff',
+      alpha:(P.opacity/100)*0.8, len:20*(P.size/100)+8, width:1.5, dir:P.direction});
+  }},
+
+hitze:{ name:'Hitze-Flimmern', blend:'source-over',
+  defaults:{intensity:35, cycles:6, scale:60},
+  controls:['intensity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*6, L=Math.max(15,P.scale*0.5);
+    const ph=z.seed%71/71*TAU;
+    displaceRows(tc,bx,y=>
+      amp*( Math.sin(TAU*(y/L + P.cycles*p)) +
+            0.5*Math.sin(TAU*(y/(L*0.43) - P.cycles*p)+ph) ), 2);
+  }},
+
+wandersand:{ name:'Bewegender Sand', blend:'source-over',
+  defaults:{intensity:30, cycles:1, scale:180, direction:0, opacity:30},
+  controls:['intensity','cycles','scale','direction','opacity'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*6, L=Math.max(30,P.scale);
+    displaceCols(tc,bx,x=>amp*Math.sin(TAU*(x/L + P.cycles*p)),4);
+    tc.globalCompositeOperation='lighter';
+    flowStreaks(tc,z,p,bx,{tag:'ws',cycles:P.cycles,count:30,color:'#e6cf9a',
+      alpha:(P.opacity/100)*0.4, len:60, width:1.5, dir:P.direction});
+    tc.globalCompositeOperation='source-over';
+  }},
+
+fatamorgana:{ name:'Fata Morgana', blend:'source-over',
+  defaults:{intensity:45, cycles:2, scale:220, opacity:30},
+  controls:['intensity','cycles','scale','opacity'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*10, L=Math.max(60,P.scale);
+    displaceRows(tc,bx,y=>
+      amp*Math.sin(TAU*(y/L + P.cycles*p)) +
+      amp*0.4*Math.sin(TAU*(y/(L*0.37) - P.cycles*p)), 2);
+    // flirrender Lichtschleier
+    tc.globalCompositeOperation='lighter';
+    tc.fillStyle=`rgba(255,250,235,${(P.opacity/100)*0.15*(0.6+0.4*Math.sin(TAU*P.cycles*p))})`;
+    tc.fillRect(0,0,bx.w,bx.h);
+    tc.globalCompositeOperation='source-over';
+  }},
+
+lava:{ name:'Lavafluss', blend:'source-over',
+  defaults:{intensity:40, cycles:4, scale:90, color:'#ff6a00', opacity:35, direction:0, count:14},
+  controls:['intensity','cycles','scale','color','opacity','direction','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*8, L=Math.max(20,P.scale)*0.5;
+    displaceRows(tc,bx,y=>
+      amp*Math.sin(TAU*(y/L + P.cycles*p)) +
+      amp*0.5*Math.sin(TAU*(y/(L*0.37) - P.cycles*p)), 2);
+    tc.globalCompositeOperation='lighter';
+    // pulsierender Glut-Schein
+    const a=(P.opacity/100)*(0.55+0.45*Math.sin(TAU*Math.max(1,Math.round(P.cycles/2))*p));
+    tc.fillStyle=rgba(P.color,a);
+    tc.fillRect(0,0,bx.w,bx.h);
+    // fließende helle Glutbahnen entlang der Richtung
+    flowStreaks(tc,z,p,bx,{tag:'lv',cycles:Math.max(1,Math.round(P.cycles/2)),count:P.count,
+      color:'#ffd76a', alpha:(P.opacity/100)*0.8, len:30+P.scale*0.3, width:3, dir:P.direction});
+    tc.globalCompositeOperation='source-over';
+  }},
+
+vulkanrauch:{ name:'Vulkanrauch', blend:'source-over',
+  defaults:{opacity:55, cycles:1, count:40, size:160},
+  controls:['opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const spr=getCached(z,'spr|vulkan',()=>softSprite(96,60,58,66,0.55));
+    risingPuffs(tc,z,p,bx,z.params,spr);
+  }},
+
+funken:{ name:'Funkenflug', blend:'lighter',
+  defaults:{color:'#ffb347', opacity:85, cycles:3, count:60, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    risingDots(tc,z,p,bx,{tag:'fu',count:P.count,cycles:P.cycles,color:P.color,
+      op:P.opacity/100, size:1.6*(P.size/100)+0.4, flicker:true});
+  }},
+
+/* ------------------------ STÄDTE & ORTE ------------------------- */
+
+stadtlichter:{ name:'Stadtlichter', blend:'lighter',
+  defaults:{color:'#ffcf7a', opacity:75, cycles:1, count:120, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    twinkle(tc,z,p,bx,{tag:'city',count:P.count,color:P.color,
+      op:P.opacity/100,cycles:P.cycles,size:1.4*(P.size/100)+0.4,mode:'gentle'});
+  }},
+
+kaminrauch:{ name:'Kaminrauch', blend:'source-over',
+  defaults:{opacity:40, cycles:1, count:12, size:60},
+  controls:['opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const spr=getCached(z,'spr|kamin',()=>softSprite(96,215,215,222,0.45));
+    risingPuffs(tc,z,p,bx,z.params,spr);
+  }},
+
+signalfeuer:{ name:'Signalfeuer', blend:'lighter',
+  defaults:{color:'#ff8c3a', opacity:70, cycles:3, count:25},
+  controls:['color','opacity','cycles','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, ph=z.seed%61/61*TAU;
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.45*flick(p,P.cycles,ph));
+    tc.fillRect(0,0,bx.w,bx.h);
+    risingDots(tc,z,p,bx,{tag:'sf',count:P.count,cycles:P.cycles,color:'#ffd27a',
+      op:(P.opacity/100)*0.9, size:1.5, flicker:true});
+  }},
+
+marker:{ name:'Pulsierender Marker', blend:'lighter',
+  defaults:{color:'#ff5470', opacity:80, cycles:1, num:2, width:4},
+  controls:['color','opacity','cycles','num','width'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2;
+    drawRings(tc,z,p,bx,{color:P.color,cycles:P.cycles,n:P.num,width:P.width,op:P.opacity/100});
+    // pulsierender Kernpunkt
+    const a=(P.opacity/100)*(0.5+0.5*Math.sin(TAU*P.cycles*p));
+    const g=tc.createRadialGradient(cx,cy,0,cx,cy,12);
+    g.addColorStop(0,rgba(P.color,a));
+    g.addColorStop(1,rgba(P.color,0));
+    tc.fillStyle=g;
+    tc.beginPath(); tc.arc(cx,cy,12,0,TAU); tc.fill();
+  }},
+
+questring:{ name:'Quest-Kreis / Highlight-Ring', blend:'lighter',
+  defaults:{color:'#ffd24a', opacity:80, cycles:1, scale:100, width:5},
+  controls:['color','opacity','cycles','scale','width'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2;
+    const R=Math.max(8, Math.min(bx.w,bx.h)*0.42*(P.scale/100));
+    // rotierender gestrichelter Ring (Offset in ganzen Dash-Perioden → looped)
+    tc.setLineDash([18,12]);
+    tc.lineDashOffset=-((p*P.cycles*30*8)%30);
+    tc.strokeStyle=rgba(P.color,P.opacity/100);
+    tc.lineWidth=P.width;
+    tc.beginPath(); tc.arc(cx,cy,R,0,TAU); tc.stroke();
+    tc.setLineDash([]);
+    // sanft atmender Außenglow
+    const a=(P.opacity/100)*0.35*(0.6+0.4*Math.sin(TAU*P.cycles*p));
+    tc.strokeStyle=rgba(P.color,a);
+    tc.lineWidth=P.width*2.6;
+    tc.beginPath(); tc.arc(cx,cy,R,0,TAU); tc.stroke();
+  }},
+
+fenster:{ name:'Leuchtende Fenster', blend:'lighter',
+  defaults:{color:'#ffb85c', opacity:70, cycles:1, count:60, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`win|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, w:2+rng()*3, h:3+rng()*4,
+      phi:rng()*TAU, m:1+((rng()*3)|0), b:0.5+rng()*0.5
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    for(const pt of parts){
+      const a=(P.opacity/100)*pt.b*(0.45+0.55*(0.5+0.5*Math.sin(TAU*pt.m*p+pt.phi)));
+      const s=P.size/100;
+      tc.fillStyle=`rgba(${r},${g},${b},${a})`;
+      tc.fillRect(pt.x, pt.y, pt.w*s, pt.h*s);
+    }
+  }},
+
+hafenlichter:{ name:'Hafenlichter', blend:'lighter',
+  defaults:{color:'#ffd27a', opacity:75, cycles:1, count:50, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`hf|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h*0.6, phi:rng()*TAU, m:1+((rng()*3)|0),
+      s:0.6+rng()*0.8, len:10+rng()*22
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    for(const pt of parts){
+      const tw=0.55+0.45*Math.sin(TAU*pt.m*p+pt.phi);
+      const a=tw*(P.opacity/100), sz=1.6*pt.s*(P.size/100);
+      // Lichtpunkt
+      const gr=tc.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,sz*2.6);
+      gr.addColorStop(0,`rgba(${r},${g},${b},${a})`);
+      gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      tc.fillStyle=gr;
+      tc.beginPath(); tc.arc(pt.x,pt.y,sz*2.6,0,TAU); tc.fill();
+      // schimmernde Reflexion auf dem Wasser darunter
+      const wob=1.5*Math.sin(TAU*pt.m*p+pt.phi*2);
+      const lg=tc.createLinearGradient(0,pt.y,0,pt.y+pt.len);
+      lg.addColorStop(0,`rgba(${r},${g},${b},${a*0.45})`);
+      lg.addColorStop(1,`rgba(${r},${g},${b},0)`);
+      tc.strokeStyle=lg; tc.lineWidth=sz;
+      tc.beginPath();
+      tc.moveTo(pt.x,pt.y+2);
+      tc.quadraticCurveTo(pt.x+wob, pt.y+pt.len*0.5, pt.x, pt.y+pt.len);
+      tc.stroke();
+    }
+  }},
+
+turmglow:{ name:'Magischer Turm-Glow', blend:'lighter',
+  defaults:{color:'#8f6cff', opacity:60, cycles:2, count:25},
+  controls:['color','opacity','cycles','count'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const a=(P.opacity/100)*(0.4+0.25*Math.sin(TAU*P.cycles*p));
+    tc.fillStyle=rgba(P.color,a);
+    tc.fillRect(0,0,bx.w,bx.h);
+    risingDots(tc,z,p,bx,{tag:'tg',count:P.count,cycles:Math.max(1,Math.round(P.cycles/2)),
+      color:'#e8dcff', op:(P.opacity/100)*0.9, size:1.4, flicker:true});
+  }},
+
+/* --------------------- KARTE & PERGAMENT ------------------------ */
+
+pergament:{ name:'Pergament-Flackern', blend:'lighter',
+  defaults:{color:'#ffdfa8', opacity:20, cycles:2},
+  controls:['color','opacity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params, ph=z.seed%43/43*TAU;
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.3*flick(p,P.cycles,ph));
+    tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+papierrauschen:{ name:'Papier-Rauschen', blend:'source-over',
+  defaults:{opacity:25, cycles:2, scale:100},
+  controls:['opacity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    drawNoise(tc,z,p,bx,{frames:6,cycles:P.cycles,alpha:(P.opacity/100)*0.5,
+      scale:P.scale/100, mono:false, tint:[210,190,150]});
+  }},
+
+filmgrain:{ name:'Filmgrain', blend:'source-over',
+  defaults:{opacity:30, cycles:4, scale:60},
+  controls:['opacity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    drawNoise(tc,z,p,bx,{frames:8,cycles:P.cycles,alpha:(P.opacity/100)*0.4,
+      scale:P.scale/100, mono:true});
+  }},
+
+tinte:{ name:'Animierte Tintenlinien', blend:'source-over',
+  defaults:{color:'#2b1d0e', opacity:80, cycles:1, num:6, width:2},
+  controls:['color','opacity','cycles','num','width'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    dashPaths(tc,z,p,bx,{color:P.color,op:P.opacity/100,width:P.width,
+      cycles:P.cycles,dash:14,gap:10,n:P.num,jag:0.35,glow:false});
+  }},
+
+brandrand:{ name:'Brennende Kartenränder', blend:'source-over',
+  defaults:{color:'#ff7a2a', opacity:65, cycles:3, count:40},
+  controls:['color','opacity','cycles','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, ph=z.seed%37/37*TAU;
+    // verkohlte Basis
+    tc.fillStyle=`rgba(15,6,3,${(P.opacity/100)*0.35})`;
+    tc.fillRect(0,0,bx.w,bx.h);
+    // Feuerschein + Glut
+    tc.globalCompositeOperation='lighter';
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.5*flick(p,P.cycles,ph));
+    tc.fillRect(0,0,bx.w,bx.h);
+    tc.fillStyle=rgba('#ffd76a',(P.opacity/100)*0.2*flick(p,P.cycles+1,ph*1.4));
+    tc.fillRect(0,0,bx.w,bx.h);
+    risingDots(tc,z,p,bx,{tag:'br',count:P.count,cycles:P.cycles,color:'#ffb347',
+      op:(P.opacity/100)*0.9, size:1.3, flicker:true});
+    tc.globalCompositeOperation='source-over';
+  }},
+
+vignette:{ name:'Vignette', blend:'source-over',
+  defaults:{opacity:55, cycles:1, scale:100},
+  controls:['opacity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2, maxR=Math.hypot(bx.w,bx.h)/2;
+    const a=(P.opacity/100)*(0.85+0.15*Math.sin(TAU*P.cycles*p));
+    const inner=maxR*0.35*(P.scale/100);
+    const g=tc.createRadialGradient(cx,cy,inner,cx,cy,maxR);
+    g.addColorStop(0,'rgba(0,0,8,0)');
+    g.addColorStop(1,`rgba(0,0,8,${a})`);
+    tc.fillStyle=g; tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+staub:{ name:'Staubpartikel', blend:'source-over',
+  defaults:{color:'#d8cfb8', opacity:35, cycles:1, count:80, size:100},
+  controls:['color','opacity','cycles','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const parts=getParts(z,`dust|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*bx.w, y:rng()*bx.h, phi:rng()*TAU, m:1+((rng()*2)|0),
+      A:6+rng()*18, r:0.6+rng()*1.4
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    for(const pt of parts){
+      const x=pt.x + pt.A*Math.cos(TAU*pt.m*p+pt.phi);
+      const y=pt.y + pt.A*0.6*Math.sin(TAU*pt.m*p+pt.phi);
+      const a=(P.opacity/100)*(0.35+0.3*Math.sin(TAU*pt.m*p+pt.phi*2));
+      tc.fillStyle=`rgba(${r},${g},${b},${Math.max(0,a)})`;
+      tc.beginPath(); tc.arc(x,y,pt.r*(P.size/100),0,TAU); tc.fill();
+    }
+  }},
+
+altekarte:{ name:'Alter-Karten-Wellenlook', blend:'source-over',
+  defaults:{intensity:25, cycles:1, scale:260},
+  controls:['intensity','cycles','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params, amp=P.intensity/100*8, L=Math.max(80,P.scale);
+    // großflächiges, langsames Wabern in x UND y (wie leicht gewelltes Papier)
+    const band=3;
+    for(let y=0;y<bx.h;y+=band){
+      const h=Math.min(band,bx.h-y);
+      const dx=amp*Math.sin(TAU*(y/L + P.cycles*p));
+      const dy=amp*0.5*Math.sin(TAU*(y/(L*0.7) - P.cycles*p)+1.3);
+      tc.drawImage(basePad, PAD+bx.x-dx, PAD+bx.y+y-dy, bx.w, h, 0, y, bx.w, h);
+    }
+  }},
+
+/* --------------------- ROUTEN & GRENZEN ------------------------- */
+
+handelsroute:{ name:'Animierte Handelsroute', blend:'lighter',
+  defaults:{color:'#ffcf5a', opacity:85, cycles:2, direction:0, width:6, scale:120},
+  controls:['color','opacity','cycles','direction','width','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    // wandernde "Marschier-Striche": Route als Linie auf die Karte malen,
+    // Richtung grob an den Routenverlauf anpassen.
+    stripes(tc,z,p,bx,{color:P.color,op:P.opacity/100,
+      width:P.width, gap:Math.max(8,P.scale*0.15), dir:P.direction,
+      cycles:P.cycles, soft:false});
+  }},
+
+schiffsroute:{ name:'Schiffsroute', blend:'lighter',
+  defaults:{color:'#bfe3ff', opacity:80, cycles:2, direction:0, width:4, scale:160},
+  controls:['color','opacity','cycles','direction','width','scale'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    stripes(tc,z,p,bx,{color:P.color,op:P.opacity/100,
+      width:P.width, gap:Math.max(10,P.scale*0.18), dir:P.direction,
+      cycles:P.cycles, soft:true});
+  }},
+
+armee:{ name:'Marschierende Armeen', blend:'source-over',
+  defaults:{color:'#e8e2f5', opacity:90, cycles:1, direction:0, count:60, size:100},
+  controls:['color','opacity','cycles','direction','count','size'],
+  draw(tc,z,p,bx){
+    const P=z.params, diag=Math.hypot(bx.w,bx.h), L=diag+10;
+    const parts=getParts(z,`army|${bx.w}x${bx.h}|${P.count}`,P.count,(rng)=>({
+      x:rng()*L, y:(rng()-0.5)*diag
+    }));
+    const [r,g,b]=hexToRgb(P.color);
+    rotField(tc,bx,P.direction,()=>{
+      tc.fillStyle=`rgba(${r},${g},${b},${P.opacity/100})`;
+      const s=2.4*(P.size/100);
+      for(const pt of parts){
+        const x=(pt.x + p*P.cycles*L)%L - L/2;   // gleichmäßiger Marsch, looped
+        tc.fillRect(x-s/2, pt.y-s/2, s, s);
+      }
+    });
+  }},
+
+grenzpuls:{ name:'Pulsierende Grenzen', blend:'lighter',
+  defaults:{color:'#ff5470', opacity:60, cycles:2},
+  controls:['color','opacity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params;
+    const w=0.5+0.5*Math.sin(TAU*P.cycles*p);
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*(0.25+0.75*w*w));
+    tc.fillRect(0,0,bx.w,bx.h);
+  }},
+
+grenzleuchten:{ name:'Leuchtende Königreichsgrenzen', blend:'lighter',
+  defaults:{color:'#ffd24a', opacity:60, cycles:1, direction:0, width:40},
+  controls:['color','opacity','cycles','direction','width'],
+  draw(tc,z,p,bx){
+    const P=z.params, diag=Math.hypot(bx.w,bx.h);
+    // Grundleuchten
+    tc.fillStyle=rgba(P.color,(P.opacity/100)*0.25);
+    tc.fillRect(0,0,bx.w,bx.h);
+    // durchlaufender heller Lichtimpuls (mit Wrap-Kopie → nahtlos)
+    const L=diag+P.width*4;
+    const pos=((p*P.cycles)%1)*L - L/2;
+    rotField(tc,bx,P.direction,()=>{
+      softBandAt(tc,pos,       P.width*2,diag,P.color,(P.opacity/100)*0.8);
+      softBandAt(tc,pos-L,     P.width*2,diag,P.color,(P.opacity/100)*0.8);
+      softBandAt(tc,pos+L,     P.width*2,diag,P.color,(P.opacity/100)*0.8);
+    });
+  }},
+
+einfluss:{ name:'Sich ausbreitende Einflusszone', blend:'lighter',
+  defaults:{color:'#8f6cff', opacity:50, cycles:1},
+  controls:['color','opacity','cycles'],
+  draw(tc,z,p,bx){
+    const P=z.params, cx=bx.w/2, cy=bx.h/2, maxR=Math.hypot(bx.w,bx.h)/2;
+    const prog=(p*P.cycles)%1;
+    const r=Math.max(2,prog*maxR);
+    const a=(P.opacity/100)*Math.sin(Math.PI*prog);   // ein- und ausblenden → looped
+    const g=tc.createRadialGradient(cx,cy,0,cx,cy,r);
+    g.addColorStop(0,rgba(P.color,a*0.3));
+    g.addColorStop(0.85,rgba(P.color,a*0.55));
+    g.addColorStop(1,rgba(P.color,0));
+    tc.fillStyle=g;
+    tc.beginPath(); tc.arc(cx,cy,r,0,TAU); tc.fill();
+    tc.strokeStyle=rgba(P.color,a);
+    tc.lineWidth=3;
+    tc.beginPath(); tc.arc(cx,cy,r,0,TAU); tc.stroke();
+  }},
+
+frontlinie:{ name:'Frontlinienbewegung', blend:'lighter',
+  defaults:{color:'#ff4a4a', opacity:65, cycles:1, direction:0, width:30, intensity:50},
+  controls:['color','opacity','cycles','direction','width','intensity'],
+  draw(tc,z,p,bx){
+    const P=z.params, diag=Math.hypot(bx.w,bx.h);
+    const amp=diag*0.3*(P.intensity/100);
+    const x=amp*Math.sin(TAU*P.cycles*p);   // Hin- und Herwogen der Front
+    rotField(tc,bx,P.direction,()=>{
+      softBandAt(tc,x,P.width*2,diag,P.color,(P.opacity/100)*0.6);
+      // scharfe Frontkante
+      tc.strokeStyle=rgba(P.color,P.opacity/100);
+      tc.lineWidth=2.5;
+      tc.beginPath(); tc.moveTo(x,-diag/2); tc.lineTo(x,diag/2); tc.stroke();
+    });
+  }},
+
+fogofwar:{ name:'Fog of War', blend:'source-over',
+  defaults:{opacity:70, cycles:1, scale:240, count:12},
+  controls:['opacity','cycles','scale','count'],
+  draw(tc,z,p,bx){
+    const P=z.params, a=P.opacity/100;
+    tc.fillStyle=`rgba(8,8,14,${a*0.5})`;
+    tc.fillRect(0,0,bx.w,bx.h);
+    const spr=getCached(z,'spr|fow',(rng)=>cloudSprite(rng,340,190,0.5,16,16,26));
+    driftLayer(tc,z,p,bx,spr, P.cycles,0,P.scale/160,     a*0.8, 0,   P.count);
+    driftLayer(tc,z,p,bx,spr,-P.cycles,0,P.scale/160*1.4, a*0.5, 0.37,P.count);
+  }},
+
+};
+
+// Kategorien für die Effekt-Auswahl (optgroups)
+const EFFECT_GROUPS=[
+  ['🌊 Wasser', ['water','fluss','seeschimmer','kueste','wasserfall','strudel','sonnenglitzer']],
+  ['☁️ Wolken & Wetter', ['clouds','wolkenschatten','fog','dunkelnebel','rain','snow','sandsturm','asche','blitz','rays','smoke']],
+  ['✨ Magie', ['aura','glow','leylines','portal','runen','sparkle','barriere','verderbnis','nekronebel','risse']],
+  ['⛰ Gelände', ['wind','gluehwuermchen','parallax','schneewehen','hitze','wandersand','fatamorgana','lava','vulkanrauch','funken']],
+  ['🏰 Städte & Orte', ['stadtlichter','kaminrauch','signalfeuer','marker','questring','fenster','hafenlichter','turmglow']],
+  ['📜 Karte & Pergament', ['pergament','papierrauschen','filmgrain','tinte','brandrand','vignette','staub','altekarte']],
+  ['🧭 Routen & Grenzen', ['handelsroute','schiffsroute','armee','grenzpuls','grenzleuchten','einfluss','frontlinie','fogofwar']],
+];
+
+// Farbpalette für Zonen-Markierungen
+const ZONE_COLORS=['#4fc3f7','#b388ff','#ff8a65','#aed581','#fff176','#f48fb1','#80cbc4','#ffab91','#90caf9','#ce93d8'];
+
+/* ==================================================================
+   4) SZENEN-RENDERING
+   ================================================================== */
+function renderScene(phase){
+  if(!state.img) return;
+  sctx.clearRect(0,0,state.W,state.H);
+  sctx.drawImage(baseC,0,0);
+  for(const z of state.zones){
+    if(!z.enabled || !z.bbox) continue;
+    const bx=z.bbox, fx=EFFECTS[z.type];
+    if(!fx) continue;
+    // Bounding-Box-Canvas je Zone cachen (Realloc nur bei Größenänderung)
+    if(!z._tmp || z._tmp.width!==bx.w || z._tmp.height!==bx.h){
+      z._tmp=document.createElement('canvas'); z._tmp.width=bx.w; z._tmp.height=bx.h;
+      z._tctx=z._tmp.getContext('2d');
+    }
+    const tc=z._tctx;
+    tc.clearRect(0,0,bx.w,bx.h);
+    fx.draw(tc,z,phase,bx);
+    // Maske anwenden: Effekt existiert nur innerhalb der gemalten Zone
+    tc.globalCompositeOperation='destination-in';
+    tc.drawImage(z.mask, bx.x,bx.y,bx.w,bx.h, 0,0,bx.w,bx.h);
+    tc.globalCompositeOperation='source-over';
+    // in Szene einblenden (additiv oder normal, je nach Effekt)
+    sctx.globalCompositeOperation=fx.blend;
+    sctx.drawImage(z._tmp, bx.x, bx.y);
+    sctx.globalCompositeOperation='source-over';
+  }
+}
+// statisches Bild ohne Effekte (für ausgeschaltete Live-Vorschau)
+function renderStatic(){
+  sctx.clearRect(0,0,state.W,state.H);
+  sctx.drawImage(baseC,0,0);
+}
+
+/* ==================================================================
+   5) ANSICHT & ANZEIGE-LOOP
+   ================================================================== */
+let dpr=1;
+function resizeDisplay(){
+  dpr=window.devicePixelRatio||1;
+  const r=displayCanvas.getBoundingClientRect();
+  displayCanvas.width=Math.round(r.width*dpr);
+  displayCanvas.height=Math.round(r.height*dpr);
+}
+window.addEventListener('resize', ()=>{resizeDisplay();});
+function fitView(){
+  if(!state.img) return;
+  const r=displayCanvas.getBoundingClientRect();
+  const s=Math.min(r.width/state.W, r.height/state.H)*0.94;
+  view.s=s;
+  view.x=(r.width-state.W*s)/2;
+  view.y=(r.height-state.H*s)/2;
+  updateZoomLabel();
+}
+function updateZoomLabel(){ $('zoomPct').textContent=Math.round(view.s*100)+' %'; }
+function zoomAt(cx,cy,factor){
+  const ns=clamp(view.s*factor,0.05,12);
+  view.x=cx-(cx-view.x)*(ns/view.s);
+  view.y=cy-(cy-view.y)*(ns/view.s);
+  view.s=ns; updateZoomLabel();
+}
+function toScene(clientX,clientY){
+  const r=displayCanvas.getBoundingClientRect();
+  return { x:(clientX-r.left-view.x)/view.s, y:(clientY-r.top-view.y)/view.s };
+}
+
+// Zonen-Markierung (getönte Maske) cachen
+function getTint(z){
+  if(z._tintDirty || !z._tint){
+    if(!z._tint){ z._tint=document.createElement('canvas'); z._tint.width=state.W; z._tint.height=state.H; }
+    const x=z._tint.getContext('2d');
+    x.clearRect(0,0,state.W,state.H);
+    x.drawImage(z.mask,0,0);
+    x.globalCompositeOperation='source-in';
+    x.fillStyle=z.color; x.fillRect(0,0,state.W,state.H);
+    x.globalCompositeOperation='source-over';
+    z._tintDirty=false;
+  }
+  return z._tint;
+}
+
+let lassoPts=null;
+let lastFrame=performance.now();
+function tick(now){
+  const dt=Math.min(0.1,(now-lastFrame)/1000); lastFrame=now;
+  if(state.playing && !state.exporting){
+    state.time=(state.time+dt)%state.loop;
+    syncTimelineUI();
+  }
+  if(state.img && !state.exporting){
+    if(state.live) renderScene(state.time/state.loop);
+    else renderStatic();
+  }
+
+  // Anzeige zeichnen
+  dctx.setTransform(1,0,0,1,0,0);
+  dctx.clearRect(0,0,displayCanvas.width,displayCanvas.height);
+  if(state.img){
+    dctx.setTransform(dpr*view.s,0,0,dpr*view.s, dpr*view.x, dpr*view.y);
+    dctx.imageSmoothingQuality='high';
+    dctx.drawImage(sceneC,0,0);
+    // Zonen-Overlays
+    const paintTool=(state.tool==='brush'||state.tool==='erase'||state.tool==='lasso');
+    for(const z of state.zones){
+      const show=state.showOverlays || (paintTool && z===state.sel);
+      if(!show) continue;
+      dctx.globalAlpha=(z===state.sel? state.overlayAlpha : state.overlayAlpha*0.55);
+      dctx.drawImage(getTint(z),0,0);
+    }
+    dctx.globalAlpha=1;
+    // Lasso-Vorschau
+    if(lassoPts && lassoPts.length>1){
+      dctx.strokeStyle='#ffd27a'; dctx.lineWidth=2/view.s; dctx.setLineDash([8/view.s,6/view.s]);
+      dctx.beginPath(); dctx.moveTo(lassoPts[0].x,lassoPts[0].y);
+      for(const pt of lassoPts) dctx.lineTo(pt.x,pt.y);
+      dctx.stroke(); dctx.setLineDash([]);
+    }
+    // Pinsel-Cursor
+    if(cursorPos && (state.tool==='brush'||state.tool==='erase')){
+      dctx.strokeStyle=state.tool==='erase'?'#e06767':'#e9c87f';
+      dctx.lineWidth=1.5/view.s;
+      dctx.beginPath(); dctx.arc(cursorPos.x,cursorPos.y,state.brush/2,0,TAU); dctx.stroke();
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ==================================================================
+   6) ZEICHENWERKZEUGE + UNDO/REDO
+   ================================================================== */
+const undoStack=[]; let undoIdx=-1; const UNDO_MAX=18;
+function pushUndo(entry){
+  undoStack.length=undoIdx+1;
+  undoStack.push(entry);
+  if(undoStack.length>UNDO_MAX) undoStack.shift();
+  undoIdx=undoStack.length-1;
+  refreshUndoBtns();
+}
+function applyMaskSnapshot(z,snap){
+  z.maskCtx.clearRect(0,0,state.W,state.H);
+  z.maskCtx.drawImage(snap,0,0);
+  z._tintDirty=true; recomputeBbox(z);
+}
+function doUndo(){
+  if(undoIdx<0) return;
+  const e=undoStack[undoIdx--];
+  if(state.zones.includes(e.zone)) applyMaskSnapshot(e.zone,e.before);
+  refreshUndoBtns();
+}
+function doRedo(){
+  if(undoIdx>=undoStack.length-1) return;
+  const e=undoStack[++undoIdx];
+  if(state.zones.includes(e.zone)) applyMaskSnapshot(e.zone,e.after);
+  refreshUndoBtns();
+}
+function refreshUndoBtns(){
+  $('btnUndo').disabled=undoIdx<0;
+  $('btnRedo').disabled=undoIdx>=undoStack.length-1;
+}
+
+// Bounding-Box der Maske neu berechnen (nach jedem Strich / Laden)
+function recomputeBbox(z){
+  const d=z.maskCtx.getImageData(0,0,state.W,state.H).data;
+  let minx=state.W,miny=state.H,maxx=-1,maxy=-1;
+  for(let y=0;y<state.H;y++){
+    const row=y*state.W*4;
+    for(let x=0;x<state.W;x++){
+      if(d[row+x*4+3]>8){
+        if(x<minx)minx=x; if(x>maxx)maxx=x;
+        if(y<miny)miny=y; if(y>maxy)maxy=y;
+      }
+    }
+  }
+  z._cache={};                       // Partikel/Pfade an neue Box anpassen
+  if(maxx<0){ z.bbox=null; return; }
+  const m=6;
+  minx=Math.max(0,minx-m); miny=Math.max(0,miny-m);
+  maxx=Math.min(state.W-1,maxx+m); maxy=Math.min(state.H-1,maxy+m);
+  z.bbox={x:minx,y:miny,w:maxx-minx+1,h:maxy-miny+1};
+}
+
+// weicher Pinselstempel
+function stamp(ctx,x,y,r,erase){
+  ctx.save();
+  ctx.globalCompositeOperation=erase?'destination-out':'source-over';
+  const gr=ctx.createRadialGradient(x,y,0,x,y,r);
+  gr.addColorStop(0,'rgba(255,255,255,1)');
+  gr.addColorStop(0.6,'rgba(255,255,255,1)');
+  gr.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=gr;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function strokeSegment(z,from,to,r,erase){
+  const dist=Math.hypot(to.x-from.x,to.y-from.y);
+  const step=Math.max(1,r/3);
+  const n=Math.max(1,Math.ceil(dist/step));
+  for(let i=0;i<=n;i++){
+    const t=i/n;
+    stamp(z.maskCtx, from.x+(to.x-from.x)*t, from.y+(to.y-from.y)*t, r, erase);
+  }
+  z._tintDirty=true;
+}
+
+// ---------- Pointer-Events (Maus, Touch, Apple Pencil) ----------
+const pointers=new Map();   // aktive Pointer für Pinch/Pan
+let painting=null;          // {zone, last, before}
+let panning=null;
+let cursorPos=null;
+let pinchStart=null;
+
+displayCanvas.addEventListener('pointerdown', e=>{
+  if(!state.img){ toast('Bitte zuerst eine Karte importieren.'); return; }
+  displayCanvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    // Pinch beginnt → laufenden Strich abbrechen (war vermutlich versehentlich)
+    cancelPaint();
+    const [a,b]=[...pointers.values()];
+    pinchStart={ d:Math.hypot(a.x-b.x,a.y-b.y), s:view.s,
+                 mx:(a.x+b.x)/2, my:(a.y+b.y)/2, vx:view.x, vy:view.y };
+    return;
+  }
+  const sc=toScene(e.clientX,e.clientY);
+  if(state.tool==='pan' || e.button===1){
+    panning={sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y};
+  }else if(state.tool==='lasso'){
+    if(!ensureZone()) return;
+    lassoPts=[sc];
+  }else{ // Pinsel / Radierer
+    if(!ensureZone()) return;
+    const z=state.sel;
+    painting={zone:z, last:sc, before:cloneCanvas(z.mask)};
+    stamp(z.maskCtx, sc.x, sc.y, brushRadius(e), state.tool==='erase');
+    z._tintDirty=true;
+    growBbox(z, sc, brushRadius(e));
+  }
+  e.preventDefault();
+},{passive:false});
+
+displayCanvas.addEventListener('pointermove', e=>{
+  if(!state.img) return;
+  cursorPos=toScene(e.clientX,e.clientY);
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinchStart && pointers.size===2){
+    const [a,b]=[...pointers.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    const r=displayCanvas.getBoundingClientRect();
+    const ns=clamp(pinchStart.s*(d/pinchStart.d),0.05,12);
+    view.s=ns;
+    view.x=(mx-r.left)-((pinchStart.mx-r.left)-pinchStart.vx)*(ns/pinchStart.s);
+    view.y=(my-r.top)-((pinchStart.my-r.top)-pinchStart.vy)*(ns/pinchStart.s);
+    updateZoomLabel();
+    return;
+  }
+  if(panning){
+    view.x=panning.vx+(e.clientX-panning.sx);
+    view.y=panning.vy+(e.clientY-panning.sy);
+    return;
+  }
+  if(painting){
+    // getCoalescedEvents: flüssige Striche mit dem Apple Pencil
+    const evs=e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for(const ev of evs){
+      const p2=toScene(ev.clientX,ev.clientY);
+      strokeSegment(painting.zone, painting.last, p2, brushRadius(ev), state.tool==='erase');
+      growBbox(painting.zone, p2, brushRadius(ev));
+      painting.last=p2;
+    }
+  }
+  if(lassoPts){
+    const sc2=toScene(e.clientX,e.clientY);
+    const lp=lassoPts[lassoPts.length-1];
+    if(Math.hypot(sc2.x-lp.x,sc2.y-lp.y)>3/view.s) lassoPts.push(sc2);
+  }
+},{passive:true});
+
+function endPointer(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinchStart=null;
+  panning=null;
+  if(painting){
+    const z=painting.zone;
+    recomputeBbox(z);
+    pushUndo({zone:z, before:painting.before, after:cloneCanvas(z.mask)});
+    painting=null;
+  }
+  if(lassoPts){
+    const z=state.sel;
+    if(z && lassoPts.length>2){
+      const before=cloneCanvas(z.mask);
+      const x=z.maskCtx;
+      x.save(); x.fillStyle='#fff';
+      x.beginPath(); x.moveTo(lassoPts[0].x,lassoPts[0].y);
+      for(const pt of lassoPts) x.lineTo(pt.x,pt.y);
+      x.closePath(); x.fill(); x.restore();
+      z._tintDirty=true; recomputeBbox(z);
+      pushUndo({zone:z, before, after:cloneCanvas(z.mask)});
+    }
+    lassoPts=null;
+  }
+}
+function cancelPaint(){
+  if(painting){ applyMaskSnapshot(painting.zone,painting.before); painting=null; }
+  lassoPts=null;
+}
+displayCanvas.addEventListener('pointerup', endPointer);
+displayCanvas.addEventListener('pointercancel', e=>{pointers.delete(e.pointerId); pinchStart=null; panning=null; cancelPaint();});
+displayCanvas.addEventListener('pointerleave', ()=>{cursorPos=null;});
+displayCanvas.addEventListener('contextmenu', e=>e.preventDefault());
+// Safari-Seiten-Zoom/-Scroll während des Zeichnens unterbinden
+document.addEventListener('gesturestart', e=>e.preventDefault());
+document.addEventListener('touchmove', e=>{ if(e.target===displayCanvas) e.preventDefault(); },{passive:false});
+
+function brushRadius(e){
+  let r=state.brush/2;
+  if(state.usePressure && e.pointerType==='pen' && e.pressure>0){
+    r*=clamp(e.pressure*1.8,0.2,1.8);
+  }
+  return Math.max(2,r);
+}
+function growBbox(z,pt,r){
+  const x0=Math.max(0,Math.floor(pt.x-r-6)), y0=Math.max(0,Math.floor(pt.y-r-6));
+  const x1=Math.min(state.W-1,Math.ceil(pt.x+r+6)), y1=Math.min(state.H-1,Math.ceil(pt.y+r+6));
+  if(x1<x0||y1<y0) return;
+  if(!z.bbox){ z.bbox={x:x0,y:y0,w:x1-x0+1,h:y1-y0+1}; }
+  else{
+    const nx=Math.min(z.bbox.x,x0), ny=Math.min(z.bbox.y,y0);
+    const mx=Math.max(z.bbox.x+z.bbox.w-1,x1), my=Math.max(z.bbox.y+z.bbox.h-1,y1);
+    z.bbox={x:nx,y:ny,w:mx-nx+1,h:my-ny+1};
+  }
+  z._cache={};
+}
+// Falls keine Zone existiert/ausgewählt ist: automatisch eine anlegen
+function ensureZone(){
+  if(state.sel) return true;
+  if(!state.img) return false;
+  createZone($('newZoneType').value);
+  toast('Neue Zone angelegt – male jetzt den Bereich ein.');
+  return true;
+}
+
+// Maus-Rad = Zoom
+displayCanvas.addEventListener('wheel', e=>{
+  if(!state.img) return;
+  e.preventDefault();
+  const r=displayCanvas.getBoundingClientRect();
+  zoomAt(e.clientX-r.left, e.clientY-r.top, Math.pow(1.0015,-e.deltaY));
+},{passive:false});
+
+/* ==================================================================
+   7) ZONEN-VERWALTUNG + UI
+   ================================================================== */
+let zoneCounter=0;
+function defaultsFor(type){ return {...EFFECTS[type].defaults}; }
+function createZone(type, opts={}){
+  zoneCounter++;
+  const mask=document.createElement('canvas'); mask.width=state.W; mask.height=state.H;
+  const baseName=EFFECTS[type].name.split(' /')[0].split(' (')[0];
+  const z={
+    id:'z'+Date.now()+'_'+zoneCounter,
+    name: opts.name || (baseName+' '+zoneCounter),
+    type,
+    params: opts.params || defaultsFor(type),
+    enabled: opts.enabled!==undefined?opts.enabled:true,
+    mask, maskCtx: mask.getContext('2d'),
+    color: opts.color || ZONE_COLORS[(zoneCounter-1)%ZONE_COLORS.length],
+    bbox:null,
+    seed: opts.seed!==undefined?opts.seed:((Math.random()*1e9)|0),
+    _cache:{}, _tint:null, _tintDirty:true, _tmp:null, _tctx:null,
+  };
+  state.zones.push(z);
+  selectZone(z);
+  renderZoneList();
+  return z;
+}
+function deleteZone(z){
+  const i=state.zones.indexOf(z); if(i<0) return;
+  state.zones.splice(i,1);
+  // zugehörige Undo-Einträge entfernen
+  for(let k=undoStack.length-1;k>=0;k--) if(undoStack[k].zone===z) undoStack.splice(k,1);
+  undoIdx=Math.min(undoIdx,undoStack.length-1); refreshUndoBtns();
+  if(state.sel===z) state.sel=state.zones[Math.max(0,i-1)]||null;
+  renderZoneList(); renderFxPanel();
+}
+function duplicateZone(z){
+  const nz=createZone(z.type,{
+    name:z.name+' Kopie', params:{...z.params}, enabled:z.enabled,
+    seed:(Math.random()*1e9)|0,
+  });
+  nz.maskCtx.drawImage(z.mask,0,0);
+  nz._tintDirty=true; recomputeBbox(nz);
+  renderZoneList(); renderFxPanel();
+  toast('Zone dupliziert.');
+}
+function selectZone(z){
+  state.sel=z;
+  renderZoneList(); renderFxPanel();
+}
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderZoneList(){
+  const list=$('zoneList'); list.innerHTML='';
+  if(state.zones.length===0){
+    list.innerHTML='<div class="mini" style="padding:4px 2px">Noch keine Zonen. Wähle oben einen Effekt und tippe „＋ Zone“, dann male den Bereich auf die Karte.</div>';
+    return;
+  }
+  for(const z of state.zones){
+    const el=document.createElement('div');
+    el.className='zoneItem'+(z===state.sel?' sel':'');
+    el.innerHTML=
+      `<span class="dot" style="background:${z.color};color:${z.color}"></span>
+       <div class="zn"><div style="${z.enabled?'':'opacity:.5'}">${escapeHtml(z.name)}</div>
+       <div class="zt">${escapeHtml(EFFECTS[z.type].name)}</div></div>
+       <button data-a="tog" title="Ein/Aus">${z.enabled?'👁':'🚫'}</button>
+       <button data-a="dup" title="Duplizieren">⧉</button>
+       <button data-a="del" title="Löschen">🗑</button>`;
+    el.addEventListener('click',ev=>{
+      const a=ev.target.getAttribute('data-a');
+      if(a==='tog'){ z.enabled=!z.enabled; renderZoneList(); if(z===state.sel)renderFxPanel(); }
+      else if(a==='dup'){ duplicateZone(z); }
+      else if(a==='del'){ deleteZone(z); }
+      else selectZone(z);
+    });
+    list.appendChild(el);
+  }
+}
+function renderFxPanel(){
+  const panel=$('fxPanel');
+  if(!state.sel){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  const z=state.sel;
+  $('zoneName').value=z.name;
+  $('fxType').value=z.type;
+  $('fxEnabled').checked=z.enabled;
+  const box=$('fxControls'); box.innerHTML='';
+  for(const key of EFFECTS[z.type].controls){
+    const cfg=CONTROLS[key]; if(cfg===undefined) continue;
+    if(cfg.type==='color'){
+      const wrap=document.createElement('label'); wrap.className='row';
+      wrap.innerHTML=`<span>${cfg.label}</span>`;
+      const inp=document.createElement('input'); inp.type='color'; inp.value=z.params[key]||'#ffffff';
+      inp.addEventListener('input',()=>{ z.params[key]=inp.value; z._cache={}; });
+      wrap.appendChild(inp); box.appendChild(wrap);
+    }else{
+      const lab=document.createElement('label'); lab.className='row';
+      const val=document.createElement('b');
+      const fmt=v=>v+(cfg.unit||'');
+      val.textContent=fmt(z.params[key]);
+      lab.innerHTML=`<span>${cfg.label}</span>`; lab.appendChild(val);
+      const inp=document.createElement('input'); inp.type='range';
+      inp.min=cfg.min; inp.max=cfg.max; inp.step=cfg.step; inp.value=z.params[key];
+      inp.addEventListener('input',()=>{
+        z.params[key]=parseFloat(inp.value); val.textContent=fmt(z.params[key]);
+        // Struktur-Parameter → Cache (Partikel/Pfade/Sprites) neu aufbauen
+        if(['count','scale','width','num','size'].includes(key)) z._cache={};
+      });
+      box.appendChild(lab); box.appendChild(inp);
+    }
+  }
+}
+// Effekt-Auswahl mit Kategorien füllen
+function buildEffectSelect(sel){
+  sel.innerHTML='';
+  for(const [grp,keys] of EFFECT_GROUPS){
+    const og=document.createElement('optgroup'); og.label=grp;
+    for(const k of keys){
+      const o=document.createElement('option'); o.value=k; o.textContent=EFFECTS[k].name;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+}
+
+// ---- Zonen-UI-Handler ----
+$('zoneName').addEventListener('input',e=>{ if(state.sel){ state.sel.name=e.target.value; renderZoneList(); }});
+$('fxType').addEventListener('change',e=>{
+  if(!state.sel) return;
+  state.sel.type=e.target.value;
+  state.sel.params=defaultsFor(e.target.value);   // sinnvolle Standardwerte laden
+  state.sel._cache={};
+  renderZoneList(); renderFxPanel();
+});
+$('fxEnabled').addEventListener('change',e=>{ if(state.sel){ state.sel.enabled=e.target.checked; renderZoneList(); }});
+$('btnDelZone').addEventListener('click',()=>{ if(state.sel) deleteZone(state.sel); });
+$('btnDupZone').addEventListener('click',()=>{ if(state.sel) duplicateZone(state.sel); });
+$('btnNewZone').addEventListener('click',()=>{
+  if(!state.img){ toast('Bitte zuerst eine Karte importieren.'); return; }
+  createZone($('newZoneType').value);
+  toast('Zone angelegt – male den Bereich auf die Karte.');
+});
+$('btnClearZone').addEventListener('click',()=>{
+  const z=state.sel; if(!z) return;
+  const before=cloneCanvas(z.mask);
+  z.maskCtx.clearRect(0,0,state.W,state.H);
+  z._tintDirty=true; recomputeBbox(z);
+  pushUndo({zone:z, before, after:cloneCanvas(z.mask)});
+  toast('Zone geleert.');
+});
+$('btnSmoothZone').addEventListener('click',()=>{
+  const z=state.sel; if(!z||!z.bbox){ toast('Diese Zone ist leer.'); return; }
+  const before=cloneCanvas(z.mask);
+  // Weichzeichnen über Halbgrößen-Down-/Upscale (glättet Ränder ohne Fremdlibs)
+  const half=document.createElement('canvas');
+  half.width=Math.max(1,state.W>>1); half.height=Math.max(1,state.H>>1);
+  const hx=half.getContext('2d'); hx.imageSmoothingEnabled=true;
+  hx.drawImage(z.mask,0,0,half.width,half.height);
+  z.maskCtx.clearRect(0,0,state.W,state.H);
+  z.maskCtx.imageSmoothingEnabled=true;
+  z.maskCtx.drawImage(half,0,0,state.W,state.H);
+  z._tintDirty=true; recomputeBbox(z);
+  pushUndo({zone:z, before, after:cloneCanvas(z.mask)});
+  toast('Maskenränder geglättet.');
+});
+
+/* ==================================================================
+   8) WERKZEUG- & REGLER-HANDLER
+   ================================================================== */
+function setTool(t){
+  state.tool=t;
+  document.querySelectorAll('.toolgrid button').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
+  displayCanvas.style.cursor = t==='pan'?'grab':(t==='lasso'?'crosshair':'crosshair');
+}
+document.querySelectorAll('.toolgrid button').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+$('brushSize').addEventListener('input',e=>{ state.brush=parseInt(e.target.value); $('brushVal').textContent=state.brush+' px'; });
+$('pressureChk').addEventListener('change',e=>state.usePressure=e.target.checked);
+$('overlayChk').addEventListener('change',e=>state.showOverlays=e.target.checked);
+$('liveChk').addEventListener('change',e=>state.live=e.target.checked);
+$('overlayAlpha').addEventListener('input',e=>{ state.overlayAlpha=parseInt(e.target.value)/100; $('ovaVal').textContent=e.target.value+' %'; });
+$('btnUndo').addEventListener('click',doUndo);
+$('btnRedo').addEventListener('click',doRedo);
+$('zoomIn').addEventListener('click',()=>{const r=displayCanvas.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1.2);});
+$('zoomOut').addEventListener('click',()=>{const r=displayCanvas.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1/1.2);});
+$('zoomFit').addEventListener('click',fitView);
+
+// ---- Wiedergabe / Timeline ----
+function togglePlay(){ state.playing=!state.playing; $('btnPlay').textContent=state.playing?'⏸ Pause':'▶ Play'; }
+$('btnPlay').addEventListener('click',togglePlay);
+$('timeline').addEventListener('input',e=>{
+  state.playing=false; $('btnPlay').textContent='▶ Play';
+  state.time=(parseInt(e.target.value)/1000)*state.loop;
+  syncTimeLabel();
+});
+$('loopLen').addEventListener('change',e=>{
+  let v=clamp(parseFloat(e.target.value)||6,1,10); e.target.value=v;
+  state.loop=v; if(state.time>v) state.time=0; syncTimeLabel();
+});
+function syncTimelineUI(){
+  $('timeline').value=Math.round(state.time/state.loop*1000);
+  syncTimeLabel();
+}
+function syncTimeLabel(){
+  $('timeLabel').textContent=state.time.toFixed(1).replace('.',',')+' s / '+state.loop+' s';
+}
+
+// ---- Tastatur ----
+window.addEventListener('keydown',e=>{
+  if(/input|textarea|select/i.test(e.target.tagName)) return;
+  const k=e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&k==='z'){ e.preventDefault(); e.shiftKey?doRedo():doUndo(); return; }
+  if((e.ctrlKey||e.metaKey)&&k==='y'){ e.preventDefault(); doRedo(); return; }
+  if(k===' '){ e.preventDefault(); togglePlay(); }
+  else if(k==='b') setTool('brush');
+  else if(k==='e') setTool('erase');
+  else if(k==='l') setTool('lasso');
+  else if(k==='h') setTool('pan');
+  else if(k==='v'){ state.live=!state.live; $('liveChk').checked=state.live; }
+});
+
+/* ==================================================================
+   9) IMPORT & PROJEKT SPEICHERN / LADEN
+   ================================================================== */
+function setupScene(img){
+  // Szenen-Auflösung bestimmen (längste Kante ≤ MAX_SCENE)
+  let w=img.naturalWidth, h=img.naturalHeight;
+  const sc=Math.min(1, MAX_SCENE/Math.max(w,h));
+  state.W=Math.max(1,Math.round(w*sc)); state.H=Math.max(1,Math.round(h*sc));
+  baseC.width=state.W; baseC.height=state.H;
+  sceneC.width=state.W; sceneC.height=state.H;
+  bctx.clearRect(0,0,state.W,state.H); bctx.drawImage(img,0,0,state.W,state.H);
+  // gepolsterte Version (Rand gespiegelt/erweitert für Displacement)
+  basePad.width=state.W+PAD*2; basePad.height=state.H+PAD*2;
+  pctx.clearRect(0,0,basePad.width,basePad.height);
+  pctx.drawImage(baseC,PAD,PAD);
+  // Ränder auffüllen, damit Verschiebungen keine Löcher zeigen
+  pctx.drawImage(baseC,0,0,state.W,1, PAD,0, state.W,PAD);              // oben
+  pctx.drawImage(baseC,0,state.H-1,state.W,1, PAD,state.H+PAD, state.W,PAD); // unten
+  pctx.drawImage(baseC,0,0,1,state.H, 0,PAD, PAD,state.H);             // links
+  pctx.drawImage(baseC,state.W-1,0,1,state.H, state.W+PAD,PAD, PAD,state.H); // rechts
+  state.img=img;
+  $('emptyHint').style.display='none';
+  fitView();
+}
+function loadImage(dataURL, resetZones){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      state.imgDataURL=dataURL;
+      if(resetZones){ state.zones=[]; state.sel=null; zoneCounter=0;
+        undoStack.length=0; undoIdx=-1; refreshUndoBtns(); }
+      setupScene(img);
+      if(resetZones){ renderZoneList(); renderFxPanel(); }
+      res();
+    };
+    img.onerror=()=>rej(new Error('Bild konnte nicht geladen werden'));
+    img.src=dataURL;
+  });
+}
+$('btnImport').addEventListener('click',()=>$('fileImg').click());
+$('fileImg').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>loadImage(rd.result,true).then(()=>toast('Karte geladen. Lege jetzt Zonen an.')).catch(err=>toast('Fehler: '+err.message));
+  rd.onerror=()=>toast('Datei konnte nicht gelesen werden.');
+  rd.readAsDataURL(f);
+  e.target.value='';
+});
+
+// ---- Projekt speichern ----
+$('btnSave').addEventListener('click',()=>{
+  if(!state.img){ toast('Es gibt noch keine Karte zum Speichern.'); return; }
+  const proj={
+    version:2, loop:state.loop, fps:parseInt($('fpsSel').value), res:parseFloat($('resSel').value),
+    image:state.imgDataURL,
+    zones:state.zones.map(z=>({
+      name:z.name, type:z.type, params:z.params, enabled:z.enabled,
+      color:z.color, seed:z.seed, mask:z.mask.toDataURL('image/png')
+    })),
+  };
+  const blob=new Blob([JSON.stringify(proj)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='kartenwerkstatt-projekt.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('Projekt gespeichert.');
+});
+
+// ---- Projekt laden ----
+$('btnLoad').addEventListener('click',()=>$('fileProj').click());
+$('fileProj').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    let proj; try{ proj=JSON.parse(rd.result); }catch(err){ toast('Ungültige Projektdatei.'); return; }
+    if(!proj.image){ toast('Projektdatei enthält keine Karte.'); return; }
+    loadImage(proj.image,true).then(()=>{
+      state.loop=clamp(proj.loop||6,1,10); $('loopLen').value=state.loop;
+      if(proj.fps) $('fpsSel').value=String(proj.fps);
+      if(proj.res) $('resSel').value=String(proj.res);
+      let pending=(proj.zones||[]).length;
+      if(pending===0){ renderZoneList(); renderFxPanel(); syncTimeLabel(); toast('Projekt geladen (keine Zonen).'); return; }
+      (proj.zones||[]).forEach(zd=>{
+        zoneCounter++;
+        const mask=document.createElement('canvas'); mask.width=state.W; mask.height=state.H;
+        const z={
+          id:'z'+Date.now()+'_'+zoneCounter, name:zd.name, type:zd.type in EFFECTS?zd.type:'aura',
+          params:{...defaultsFor(zd.type in EFFECTS?zd.type:'aura'), ...(zd.params||{})},
+          enabled:zd.enabled!==false, mask, maskCtx:mask.getContext('2d'),
+          color:zd.color||ZONE_COLORS[(zoneCounter-1)%ZONE_COLORS.length],
+          bbox:null, seed:zd.seed!==undefined?zd.seed:((Math.random()*1e9)|0),
+          _cache:{},_tint:null,_tintDirty:true,_tmp:null,_tctx:null,
+        };
+        state.zones.push(z);
+        const mi=new Image();
+        mi.onload=()=>{ z.maskCtx.drawImage(mi,0,0); z._tintDirty=true; recomputeBbox(z);
+          if(--pending===0){ state.sel=state.zones[0]||null; renderZoneList(); renderFxPanel(); } };
+        mi.onerror=()=>{ if(--pending===0){ state.sel=state.zones[0]||null; renderZoneList(); renderFxPanel(); } };
+        mi.src=zd.mask;
+      });
+      syncTimeLabel();
+      toast('Projekt geladen.');
+    }).catch(err=>toast('Fehler beim Laden: '+err.message));
+  };
+  rd.readAsText(f); e.target.value='';
+});
+
+/* ==================================================================
+   10) WEBM-EXPORT (MediaRecorder + captureStream)
+   ================================================================== */
+let exportAbort=false;
+function pickMime(){
+  const opts=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'];
+  if(!window.MediaRecorder) return null;
+  for(const m of opts) if(MediaRecorder.isTypeSupported(m)) return m;
+  return '';
+}
+$('btnCancelExport').addEventListener('click',()=>{ exportAbort=true; });
+$('btnExport').addEventListener('click',startExport);
+
+function startExport(){
+  if(!state.img){ toast('Bitte zuerst eine Karte importieren.'); return; }
+  if(state.zones.length===0){ toast('Lege zuerst mindestens eine Zone mit Effekt an.'); return; }
+  if(!window.MediaRecorder || !sceneC.captureStream){
+    toast('Dein Browser unterstützt keinen Video-Export. Bitte Chrome/Edge/Firefox aktuell nutzen.'); return;
+  }
+  const mime=pickMime();
+  if(mime===null){ toast('MediaRecorder wird nicht unterstützt.'); return; }
+
+  const fps=parseInt($('fpsSel').value);
+  const res=parseFloat($('resSel').value);
+  // gerade Pixelmaße (Codec-Anforderung)
+  const ow=Math.max(2,Math.round(state.W*res/2)*2);
+  const oh=Math.max(2,Math.round(state.H*res/2)*2);
+  const out=document.createElement('canvas'); out.width=ow; out.height=oh;
+  const octx=out.getContext('2d');
+
+  const wasPlaying=state.playing;
+  state.playing=false; state.exporting=true; exportAbort=false;
+  $('exportOverlay').classList.add('on');
+  $('progFill').style.width='0%'; $('progText').textContent='Aufnahme läuft …';
+
+  const stream=out.captureStream(fps);
+  let rec;
+  try{ rec=new MediaRecorder(stream,{mimeType:mime||undefined, videoBitsPerSecond:12_000_000}); }
+  catch(err){ finishExport(wasPlaying); toast('Export-Fehler: '+err.message); return; }
+  const chunks=[];
+  rec.ondataavailable=ev=>{ if(ev.data&&ev.data.size) chunks.push(ev.data); };
+  rec.onstop=()=>{
+    finishExport(wasPlaying);
+    if(exportAbort){ toast('Export abgebrochen.'); return; }
+    const type=(mime&&mime.indexOf('mp4')>=0)?'video/mp4':'video/webm';
+    const ext =type==='video/mp4'?'mp4':'webm';
+    const blob=new Blob(chunks,{type});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='kartenwerkstatt-animation.'+ext; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast('Video exportiert ✓'+(ext==='mp4'?' (MP4 – dein Browser bietet kein WebM)':''));
+  };
+
+  const dur=state.loop, t0=performance.now();
+  rec.start();
+  function frame(){
+    if(exportAbort){ try{rec.stop();}catch(e){} return; }
+    const elapsed=(performance.now()-t0)/1000;
+    let phase=elapsed/dur;
+    if(phase>=1){
+      // letztes Frame exakt = Phase 0 → nahtloser Loop
+      renderScene(0);
+      octx.clearRect(0,0,ow,oh); octx.drawImage(sceneC,0,0,ow,oh);
+      $('progFill').style.width='100%';
+      setTimeout(()=>{ try{rec.stop();}catch(e){} },120);
+      return;
+    }
+    renderScene(phase);
+    octx.clearRect(0,0,ow,oh);
+    octx.drawImage(sceneC,0,0,ow,oh);
+    const pct=Math.round(phase*100);
+    $('progFill').style.width=pct+'%';
+    $('progText').textContent='Aufnahme läuft … '+pct+' %';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+function finishExport(wasPlaying){
+  state.exporting=false; state.playing=wasPlaying;
+  $('btnPlay').textContent=state.playing?'⏸ Pause':'▶ Play';
+  $('exportOverlay').classList.remove('on');
+}
+
+/* ==================================================================
+   11) START
+   ================================================================== */
+buildEffectSelect($('newZoneType'));
+buildEffectSelect($('fxType'));
+setTool('brush');
+resizeDisplay();
+syncTimeLabel();
+refreshUndoBtns();
+renderZoneList();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
